@@ -9,14 +9,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import mc.alk.arena.BattleArena;
 import mc.alk.arena.Defaults;
-import mc.alk.arena.controllers.APIRegistrationController;
 import mc.alk.arena.controllers.ArenaClassController;
+import mc.alk.arena.controllers.OptionSetController;
 import mc.alk.arena.controllers.ParamController;
 import mc.alk.arena.objects.ArenaClass;
 import mc.alk.arena.objects.ArenaParams;
+import mc.alk.arena.objects.CommandLineString;
 import mc.alk.arena.objects.EventParams;
+import mc.alk.arena.objects.JoinType;
 import mc.alk.arena.objects.MatchParams;
 import mc.alk.arena.objects.MatchState;
 import mc.alk.arena.objects.MatchTransitions;
@@ -24,19 +25,22 @@ import mc.alk.arena.objects.Rating;
 import mc.alk.arena.objects.arenas.Arena;
 import mc.alk.arena.objects.arenas.ArenaType;
 import mc.alk.arena.objects.exceptions.ConfigException;
-import mc.alk.arena.objects.exceptions.InvalidArgumentException;
 import mc.alk.arena.objects.exceptions.InvalidOptionException;
 import mc.alk.arena.objects.messaging.AnnouncementOptions;
+import mc.alk.arena.objects.options.TransitionOption;
 import mc.alk.arena.objects.options.TransitionOptions;
-import mc.alk.arena.objects.options.TransitionOptions.TransitionOption;
+import mc.alk.arena.objects.victoryconditions.OneTeamLeft;
 import mc.alk.arena.objects.victoryconditions.VictoryType;
 import mc.alk.arena.util.BTInterface;
+import mc.alk.arena.util.DisguiseInterface;
 import mc.alk.arena.util.EffectUtil;
 import mc.alk.arena.util.InventoryUtil;
 import mc.alk.arena.util.Log;
+import mc.alk.arena.util.MinMax;
 import mc.alk.arena.util.SerializerUtil;
-import mc.alk.arena.util.Util.MinMax;
 
+import org.apache.commons.lang.StringUtils;
+import org.bukkit.GameMode;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
@@ -47,75 +51,45 @@ import org.bukkit.potion.PotionEffect;
  * @author alkarin
  *
  */
-public class ConfigSerializer extends BaseSerializer{
-	static HashMap<ArenaType, ConfigSerializer> configs = new HashMap<ArenaType, ConfigSerializer>();
+public class ConfigSerializer extends BaseConfig{
 
-	public void setConfig(ArenaType at, String f){
-		setConfig(at, new File(f));
+	final String name;
+
+	public ConfigSerializer(File configFile, String name) {
+		this.setConfig(configFile);
+		this.name = name;
 	}
 
-	public void setConfig(ArenaType at, File f){
-		super.setConfig(f);
-		if (at != null){ /// Other plugins using BattleArena, the name is the matchType or eventType name
-			configs.put(at, this);}
-	}
 
-	public static ConfigSerializer getConfig(ArenaType arenaType){
-		return configs.get(arenaType);
-	}
+	public MatchParams loadType(Plugin plugin) throws ConfigException, InvalidOptionException {
+		ConfigurationSection cs = config.getConfigurationSection(name);
 
-	public static ConfigurationSection getOtherOptions(ArenaType arenaType){
-		ConfigSerializer cs = getConfig(arenaType);
-		return cs != null ? cs.getConfigurationSection(arenaType.getName()+".otherOptions") : null;
-	}
-
-	public static void reloadConfig(Plugin plugin, ArenaType arenaType) {
-		final String name = arenaType.getName();
-		ConfigSerializer cs = configs.get(arenaType);
 		if (cs == null){
-			Log.err("Couldnt find the serializer for " + name);
-			return;
-		}
-		try {
-			cs.reloadFile();
-			ConfigSerializer.setTypeConfig(plugin, name,cs.getConfigurationSection(name),
-					!(ParamController.getMatchParams(arenaType.getName()) instanceof EventParams));
-		} catch (ConfigException e) {
-			e.printStackTrace();
-			Log.err("Error reloading " + name);
-		} catch (InvalidOptionException e) {
-			e.printStackTrace();
-			Log.err("Error reloading " + name);
-		}
-	}
-
-	public static MatchParams setTypeConfig(Plugin plugin, final String name, ConfigurationSection cs, boolean match) throws ConfigException, InvalidOptionException {
-		if (cs == null){
-			Log.err("[BattleArena] configSerializer can't load " + name +" with a config section of " + cs);
-			return null;
+			throw new ConfigException("configSerializer can't load " + name +" with a config section of " + cs);
 		}
 		/// Set up match options.. specifying defaults where not specified
 		/// Set Arena Type
 		ArenaType at;
-		if (cs.contains("arenaType")){
-			at = ArenaType.fromString(cs.getString("arenaType"));
-		} else if (cs.contains("type")){ /// old config option for setting arenaType
-			String type = cs.getString("type");
+		if (cs.contains("arenaType") || cs.contains("type")){
+			String type = cs.contains("type") ? cs.getString("type") : cs.getString("arenaType");
 			at = ArenaType.fromString(type);
 			if (at == null && type != null && !type.isEmpty()){ /// User is trying to make a custom type... let them
-				at = ArenaType.register(type, Arena.class, plugin);
+				Class<? extends Arena> arenaClass = ArenaType.getArenaClass(cs.getString("arenaClass","Arena"));
+				at = ArenaType.register(type, arenaClass, plugin);
 			}
+			if (at == null)
+				throw new ConfigException("Could not parse arena type. Valid types. " + ArenaType.getValidList());
 		} else {
 			at = ArenaType.fromString(cs.getName()); /// Get it from the configuration section name
-			if (at == null)
-				at = ArenaType.VERSUS; /// Default arena Type
 		}
-
 		if (at == null)
-			throw new ConfigException("Could not parse arena type: valid types. " + ArenaType.getValidList());
+			at = ArenaType.fromString("Arena");
+		if (at == null && !name.equalsIgnoreCase("tourney"))
+			throw new ConfigException("Could not parse arena type. Valid types. " + ArenaType.getValidList());
 
 		/// What is the default rating for this match type
 		Rating rating = cs.contains("rated") ? Rating.fromBoolean(cs.getBoolean("rated")) : Rating.RATED;
+
 		if (rating == null || rating == Rating.UNKNOWN)
 			throw new ConfigException("Could not parse rating: valid types. " + Rating.getValidList());
 
@@ -124,7 +98,7 @@ public class ConfigSerializer extends BaseSerializer{
 		if (cs.contains("victoryCondition")){
 			vt = VictoryType.fromString(cs.getString("victoryCondition"));
 		} else {
-			vt = VictoryType.DEFAULT;
+			vt = VictoryType.getType(OneTeamLeft.class);
 		}
 
 		// TODO make unknown types with a valid plugin name be deferred until after the other plugin is loaded
@@ -133,12 +107,10 @@ public class ConfigSerializer extends BaseSerializer{
 					+"valid types are " + VictoryType.getValidList());}
 
 		/// Number of teams and team sizes
-		Integer minTeams = cs.contains("minTeams") ? cs.getInt("minTeams") : 2;
-		Integer maxTeams = cs.contains("maxTeams") ? cs.getInt("maxTeams") : ArenaParams.MAX;
-		Integer minTeamSize = cs.contains("minTeamSize") ? cs.getInt("minTeamSize") : 1;
-		Integer maxTeamSize = cs.contains("maxTeamSize") ? cs.getInt("maxTeamSize") : ArenaParams.MAX;
-		Integer pminTeamSize = cs.contains("preferredMinTeamSize") ? cs.getInt("preferredMinTeamSize") : minTeamSize;
-		Integer pmaxTeamSize = cs.contains("preferredMaxTeamSize") ? cs.getInt("preferredMaxTeamSize") : maxTeamSize;
+		Integer minTeams = cs.getInt("minTeams",2);
+		Integer maxTeams = cs.getInt("maxTeams",ArenaParams.MAX);
+		Integer minTeamSize = cs.getInt("minTeamSize",1);
+		Integer maxTeamSize = cs.getInt("maxTeamSize", ArenaParams.MAX);
 		if (cs.contains("teamSize")) {
 			MinMax mm = MinMax.valueOf(cs.getString("teamSize"));
 			minTeamSize = mm.min;
@@ -149,41 +121,43 @@ public class ConfigSerializer extends BaseSerializer{
 			minTeams = mm.min;
 			maxTeams = mm.max;
 		}
-		if (cs.contains("preferredTeamSize")) {
-			MinMax mm = MinMax.valueOf(cs.getString("preferredTeamSize"));
-			pminTeamSize = mm.min;
-			pmaxTeamSize = mm.max;
-		}
-		MatchParams pi = match ? new MatchParams(at, rating,vt) : new EventParams(at,rating, vt);
+		JoinType jt = getJoinType(cs);
+		MatchParams pi = jt == JoinType.QUEUE ? new MatchParams(at, rating,vt) : new EventParams(at,rating, vt);
 
-		/// Convert first letter of name to upper case
-		StringBuilder sb = new StringBuilder();
-		sb.append(name.substring(0,1).toUpperCase());
-		sb.append(name.substring(1,name.length()));
-		pi.setName(sb.toString());
+		pi.setName(StringUtils.capitalize(name));
 
-		pi.setCommand( cs.contains("command") ? cs.getString("command") : name);
-		if (cs.contains("cmd")) /// turns out I used cmd in a lot of old configs.. so use both :(
-			pi.setCommand(cs.getString("cmd"));
-		pi.setPrefix( cs.contains("prefix") ? cs.getString("prefix") : "&6["+name+"]");
+		pi.setCommand(cs.getString("command",name));
+		if (cs.contains("cmd")){ /// turns out I used cmd in a lot of old configs.. so use both :(
+			pi.setCommand(cs.getString("cmd"));}
+		ArenaType.addAliasForType(name, pi.getCommand());
+		pi.setPrefix( cs.getString("prefix","&6["+name+"]"));
 		pi.setMinTeams(minTeams);
 		pi.setMaxTeams(maxTeams);
 		pi.setMinTeamSize(minTeamSize);
 		pi.setMaxTeamSize(maxTeamSize);
-		pi.setPreferredMinTeamSize(pminTeamSize);
-		pi.setPreferredMaxTeamSize(pmaxTeamSize);
 
-		pi.setTimeBetweenRounds( cs.contains("timeBetweenRounds") ? cs.getInt("timeBetweenRounds") : Defaults.TIME_BETWEEN_ROUNDS);
-		pi.setSecondsToLoot( cs.contains("secondsToLoot") ? cs.getInt("secondsToLoot") : Defaults.SECONDS_TO_LOOT);
-		pi.setSecondsTillMatch( cs.contains("secondsTillMatch") ? cs.getInt("secondsTillMatch") : Defaults.SECONDS_TILL_MATCH);
+		pi.setTimeBetweenRounds(cs.getInt("timeBetweenRounds",Defaults.TIME_BETWEEN_ROUNDS));
+		pi.setSecondsToLoot( cs.getInt("secondsToLoot", Defaults.SECONDS_TO_LOOT));
+		pi.setSecondsTillMatch( cs.getInt("secondsTillMatch",Defaults.SECONDS_TILL_MATCH));
 
-		pi.setMatchTime(cs.contains("matchTime") ? cs.getInt("matchTime") : Defaults.MATCH_TIME);
-		pi.setIntervalTime(cs.contains("matchUpdateInterval") ? cs.getInt("matchUpdateInterval") : Defaults.MATCH_UPDATE_INTERVAL);
+		pi.setMatchTime(cs.getInt("matchTime",Defaults.MATCH_TIME));
+		pi.setIntervalTime(cs.getInt("matchUpdateInterval",Defaults.MATCH_UPDATE_INTERVAL));
 
-		if (cs.contains("customMessages") && cs.getBoolean("customMessages")){
-			APIRegistrationController api = new APIRegistrationController();
-			api.createMessageSerializer(plugin, pi.getName(), match, plugin.getDataFolder());
+		pi.setOverrideBattleTracker(cs.getBoolean("overrideBattleTracker", true));
+		pi.setNLives(cs.getInt("nDeaths",1));
+		String nLives = cs.getString("nLives", "1");
+		if (nLives.equalsIgnoreCase("infinite")){
+			pi.setNLives(Integer.MAX_VALUE);
+		} else {
+			pi.setNLives(Integer.valueOf(nLives));
 		}
+
+		pi.setNConcurrentCompetitions(cs.getInt("nConcurrentCompetitions",Integer.MAX_VALUE));
+
+//		APIRegistrationController api = new APIRegistrationController();
+//		if (cs.getBoolean("customMessages", false) || api.hasMessageFile(plugin, pi.getName(), plugin.getDataFolder())){
+//			api.createMessageSerializer(plugin, pi.getName(), plugin.getDataFolder());
+//		}
 
 		if (cs.contains("announcements")){
 			AnnouncementOptions an = new AnnouncementOptions();
@@ -203,77 +177,77 @@ public class ConfigSerializer extends BaseSerializer{
 
 		/// Set all Transition Options
 		for (MatchState transition : MatchState.values()){
+			/// OnCancel gets taken from onComplete and modified
+			if (transition == MatchState.ONCANCEL)
+				continue;
 			TransitionOptions tops = null;
 			try{
-				tops = getParameters(cs.getConfigurationSection(transition.toString()));
-				switch (transition){
-				case ONCANCEL: /// OnCancel gets taken from onComplete and modified
-					continue;
-				case ONENTER: /// By Default on enter gets to store
-				case ONENTERWAITROOM: /// as does enter wait room, these wont overwrite each other
-					if (tops == null) tops = new TransitionOptions();
-					tops.addOption(TransitionOption.STOREEXPERIENCE);
-					tops.addOption(TransitionOption.STOREGAMEMODE);
-					tops.addOption(TransitionOption.STOREHEROCLASS);
-					if (allTops.needsClearInventory()){
-						tops.addOption(TransitionOption.CLEARINVENTORYONFIRSTENTER);
-						tops.addOption(TransitionOption.STOREITEMS);
-					}
-					break;
-				case ONLEAVE: /// By Default on leave gets to restore items and exp
-					if (tops == null) tops = new TransitionOptions();
-					tops.addOption(TransitionOption.RESTOREEXPERIENCE);
-					tops.addOption(TransitionOption.RESTOREGAMEMODE);
-					tops.addOption(TransitionOption.RESTOREHEROCLASS);
-					if (allTops.needsClearInventory())
-						tops.addOption(TransitionOption.RESTOREITEMS);
-					break;
-				default:
-					break;
-				}
+				tops = getTransitionOptions(cs.getConfigurationSection(transition.toString()));
 			} catch (Exception e){
 				Log.err("Invalid Option was not added!!! transition= " + transition);
 				e.printStackTrace();
 				continue;
 			}
 			if (tops == null){
-				allTops.removeOptions(transition);
+				allTops.removeTransitionOptions(transition);
 				continue;}
 			if (Defaults.DEBUG_TRACE) System.out.println("[ARENA] transition= " + transition +" "+tops);
-			if (transition == MatchState.ONCOMPLETE){
+			switch (transition){
+			case ONCOMPLETE:
 				TransitionOptions cancelOps = new TransitionOptions(tops);
-				allTops.addTransition(MatchState.ONCANCEL, cancelOps);
+				allTops.addTransitionOptions(MatchState.ONCANCEL, cancelOps);
 				if (Defaults.DEBUG_TRACE) System.out.println("[ARENA] transition= " + MatchState.ONCANCEL +" "+cancelOps);
+				break;
+			case ONLEAVE:
+				if (tops.hasOption(TransitionOption.TELEPORTOUT)){
+					tops.removeOption(TransitionOption.TELEPORTOUT);
+					Log.warn("You should never use the option teleportOut inside of onLeave!");
+				}
+				break;
+			default:
+				break;
 			}
-			allTops.addTransition(transition,tops);
+			allTops.addTransitionOptions(transition,tops);
 		}
 		ParamController.setTransitionOptions(pi, allTops);
-//		pi.setAllTransitionOptions(allTops);
+		/// By Default if they respawn in the arena.. people must want infinite lives
+		if (pi.getTransitionOptions().hasOptionAt(MatchState.ONSPAWN, TransitionOption.RESPAWN) && !cs.contains("nLives")){
+			pi.setNLives(Integer.MAX_VALUE);
+		}
 		ParamController.removeMatchType(pi);
 		ParamController.addMatchType(pi);
-		Log.info(BattleArena.getPName()+" registering " + pi.getName() +",bti=" + (dbName != null ? dbName : "none"));
+
+		Log.info(plugin.getName()+" registering " + pi.getName() +",bti=" + (dbName != null ? dbName : "none")+",join="+pi.getJoinType());
 		return pi;
 	}
 
-	private static TransitionOptions getParameters(ConfigurationSection cs) throws InvalidOptionException, InvalidArgumentException {
+	public static TransitionOptions getTransitionOptions(ConfigurationSection cs) throws InvalidOptionException, IllegalArgumentException {
 		if (cs == null)
 			return null;
 		Set<Object> optionsstr = new HashSet<Object>(cs.getList("options"));
 		Map<TransitionOption,Object> options = new EnumMap<TransitionOption,Object>(TransitionOption.class);
 		TransitionOptions tops = new TransitionOptions();
 		for (Object obj : optionsstr){
-			String s = obj.toString();
-			String[] split = s.split("=");
-			split[0] = split[0].trim().toUpperCase();
+			String[] split = obj.toString().split("=");
+			/// Our key for this option
+			final String key = split[0].trim().toUpperCase();
+
+			/// Check first to see if this option is actually a set of options
+			TransitionOptions optionSet = OptionSetController.getOptionSet(key);
+			if (optionSet != null){
+				tops.addOptions(optionSet);
+				continue;
+			}
+
 			TransitionOption to = null;
 			try{
-				to = TransitionOption.valueOf(split[0]);
+				to = TransitionOption.fromString(key);
 				if (to != null && to.hasValue() && split.length==1){
-					Log.err("Transition Option " + to +" needs a value! " + split[0]+"=<value>");
+					Log.err("Transition Option " + to +" needs a value! " + key+"=<value>");
 					continue;
 				}
 			} catch (Exception e){
-				Log.err("Transition Option " + split[0] +" doesn't exist!");
+				Log.err("Transition Option " + key +" doesn't exist!");
 				continue;
 			}
 
@@ -281,16 +255,38 @@ public class ConfigSerializer extends BaseSerializer{
 			if (split.length == 1){
 				continue;}
 
-			split[1] = split[1].trim();
+			/// Handle values for this option
+			final String value = split[1].trim();
 			try{
 				switch(to){
-				case MONEY:tops.setMoney(Double.valueOf(split[1])); break;
-				case EXPERIENCE: tops.setGiveExperience(Integer.valueOf(split[1])); break;
-				case HEALTH: tops.setHealth(Integer.valueOf(split[1])); break;
-				case HUNGER: tops.setHunger(Integer.valueOf(split[1])); break;
-				case DISGUISEALLAS: tops.setDisguiseAllAs(split[1]); break;
-				case WITHINDISTANCE: tops.setWithinDistance(Integer.valueOf(split[1])); break;
-				case LEVELRANGE: tops.addOption(to,MinMax.valueOf(split[1])); break;
+				case MONEY:
+					options.put(to, Double.valueOf(value));
+					break;
+				case LEVELRANGE:
+					options.put(to, MinMax.valueOf(value));
+					break;
+				case DISGUISEALLAS:
+					options.put(to, value);
+					break;
+				case HEALTH: case HEALTHP:
+				case MAGIC: case MAGICP:
+				case HUNGER:
+				case EXPERIENCE:
+				case WITHINDISTANCE:
+					options.put(to,Integer.valueOf(value));
+					break;
+				case INVULNERABLE:
+					options.put(to,Integer.valueOf(value)*20); // multiply by number of ticks per second
+					break;
+				case GAMEMODE:
+					GameMode gm = null;
+					try {
+						gm = GameMode.getByValue(Integer.valueOf(value));
+					} catch (Exception e){
+						gm = GameMode.valueOf(value.toUpperCase());
+					}
+					options.put(to,gm); // multiply by number of ticks per second
+					break;
 				default:
 					break;
 				}
@@ -299,25 +295,107 @@ public class ConfigSerializer extends BaseSerializer{
 				e.printStackTrace();
 			}
 		}
-		tops.setMatchOptions(options);
+		tops.addOptions(options);
 
-		if (cs.contains("teleportTo")){
-			tops.addOption(TransitionOption.TELEPORTTO, SerializerUtil.getLocation(cs.getString("teleportTo")));}
-		if (cs.contains("teleportWinner")){
-			tops.addOption(TransitionOption.TELEPORTWINNER, SerializerUtil.getLocation(cs.getString("teleportWinner")));}
-		if (cs.contains("teleportLoser")){
-			tops.addOption(TransitionOption.TELEPORTLOSER, SerializerUtil.getLocation(cs.getString("teleportLoser")));}
-		if (cs.contains("teleportOnArenaExit")){
-			tops.addOption(TransitionOption.TELEPORTONARENAEXIT, SerializerUtil.getLocation(cs.getString("teleportOnArenaExit")));}
-		if (cs.contains("giveClass")){
-			tops.addOption(TransitionOption.GIVECLASS, getArenaClasses(cs.getConfigurationSection("giveClass")));}
-		if (options.containsKey(TransitionOption.NEEDITEMS)){
-			tops.addOption(TransitionOption.NEEDITEMS,getItemList(cs, "items"));}
-		if (options.containsKey(TransitionOption.GIVEITEMS)){
-			tops.addOption(TransitionOption.GIVEITEMS,getItemList(cs, "items"));}
+		try{
+			if (cs.contains("teleportTo")){
+				tops.addOption(TransitionOption.TELEPORTTO, SerializerUtil.getLocation(cs.getString("teleportTo")));}
+		} catch (Exception e){
+			Log.err("Error setting the value of teleportTo ");
+			e.printStackTrace();
+		}
+
+		try{
+			if (cs.contains("teleportWinner")){
+				tops.addOption(TransitionOption.TELEPORTWINNER, SerializerUtil.getLocation(cs.getString("teleportWinner")));}
+		} catch (Exception e){
+			Log.err("Error setting the value of teleportWinner ");
+			e.printStackTrace();
+		}
+		try{
+			if (cs.contains("teleportLoser")){
+				tops.addOption(TransitionOption.TELEPORTLOSER, SerializerUtil.getLocation(cs.getString("teleportLoser")));}
+		} catch (Exception e){
+			Log.err("Error setting the value of teleportLoser ");
+			e.printStackTrace();
+		}
+
+		try{
+			if (cs.contains("teleportOnArenaExit")){
+				tops.addOption(TransitionOption.TELEPORTONARENAEXIT, SerializerUtil.getLocation(cs.getString("teleportOnArenaExit")));}
+		} catch (Exception e){
+			Log.err("Error setting the value of teleportOnArenaExit ");
+			e.printStackTrace();
+		}
+		try{
+			if (cs.contains("giveClass")){
+				tops.addOption(TransitionOption.GIVECLASS, getArenaClasses(cs.getConfigurationSection("giveClass")));}
+		} catch (Exception e){
+			Log.err("Error setting the value of giveClass ");
+			e.printStackTrace();
+		}
+		try{
+			if (cs.contains("giveDisguise")){
+				tops.addOption(TransitionOption.GIVEDISGUISE, getArenaDisguises(cs.getConfigurationSection("giveDisguise")));}
+		} catch (Exception e){
+			Log.err("Error setting the value of giveDisguise ");
+			e.printStackTrace();
+		}
+		try{
+			if (cs.contains("doCommands")){
+				tops.addOption(TransitionOption.DOCOMMANDS, getDoCommands(cs.getStringList("doCommands")));}
+		} catch (Exception e){
+			Log.err("Error setting the value of doCommands ");
+			e.printStackTrace();
+		}
+		try{
+			if (options.containsKey(TransitionOption.NEEDITEMS)){
+				List<ItemStack> items = getItemList(cs, "items");
+				if (items!=null && !items.isEmpty())
+					tops.addOption(TransitionOption.NEEDITEMS,items);
+				else
+					options.remove(TransitionOption.NEEDITEMS);
+			}
+		} catch (Exception e){
+			Log.err("Error setting the value of needItems ");
+			e.printStackTrace();
+		}
+		try{
+			if (options.containsKey(TransitionOption.GIVEITEMS)){
+				List<ItemStack> items = getItemList(cs, "items");
+				if (items!=null && !items.isEmpty())
+					tops.addOption(TransitionOption.GIVEITEMS,items);
+				else
+					options.remove(TransitionOption.GIVEITEMS);
+			}
+		} catch (Exception e){
+			Log.err("Error setting the value of giveItems ");
+			e.printStackTrace();
+		}
+
+		try{
+			if (options.containsKey(TransitionOption.ENCHANTS)){
+				List<PotionEffect> effects = getEffectList(cs, "enchants");
+				if (effects!=null && !effects.isEmpty())
+					tops.addOption(TransitionOption.ENCHANTS, effects);
+			}
+		} catch (Exception e){
+			Log.err("Error setting the value of enchants ");
+			e.printStackTrace();
+		}
+
 		setPermissionSection(cs,"addPerms",tops);
-		if (options.containsKey(TransitionOption.ENCHANTS)){ tops.setEffects(getEffectList(cs, "enchants"));}
+
 		return tops;
+	}
+
+	private static List<CommandLineString> getDoCommands(List<String> list) throws InvalidOptionException {
+		List<CommandLineString> commands = new ArrayList<CommandLineString>();
+		for (String line: list){
+			CommandLineString cls = CommandLineString.parse(line);
+			commands.add(cls);
+		}
+		return commands;
 	}
 
 	private static void setPermissionSection(ConfigurationSection cs, String nodeString, TransitionOptions tops) throws InvalidOptionException {
@@ -350,19 +428,47 @@ public class ConfigSerializer extends BaseSerializer{
 				try {
 					team = Integer.valueOf(whichTeam.replaceAll("team", "")) - 1;
 				} catch(Exception e){
-					Log.err("Couldnt find which team this string belongs to '" + whichTeam+"'");
+					Log.err("Couldnt find which team this class belongs to '" + whichTeam+"'");
 					continue;
 				}
 			}
 			if (team ==-1){
-				Log.err("Couldnt find which team this string belongs to '" + whichTeam+"'");
+				Log.err("Couldnt find which team this class belongs to '" + whichTeam+"'");
 				continue;
 			}
 			classes.put(team, ac);
 		}
 		return classes;
 	}
+
+	public static HashMap<Integer,String> getArenaDisguises(ConfigurationSection cs){
+		HashMap<Integer,String> disguises = new HashMap<Integer,String>();
+		Set<String> keys = cs.getKeys(false);
+		for (String whichTeam: keys){
+			int team = -1;
+			final String disguiseName = cs.getString(whichTeam);
+			if (whichTeam.equalsIgnoreCase("default")){
+				team = DisguiseInterface.DEFAULT;
+			} else {
+				try {
+					team = Integer.valueOf(whichTeam.replaceAll("team", "")) - 1;
+				} catch(Exception e){
+					Log.err("Couldnt find which team this disguise belongs to '" + whichTeam+"'");
+					continue;
+				}
+			}
+			if (team ==-1){
+				Log.err("Couldnt find which team this disguise belongs to '" + whichTeam+"'");
+				continue;
+			}
+			disguises.put(team, disguiseName);
+		}
+		return disguises;
+	}
+
 	public static List<PotionEffect> getEffectList(ConfigurationSection cs, String nodeString) {
+		if (cs == null || cs.getList(nodeString) == null)
+			return null;
 		final int strengthDefault = 1;
 		final int timeDefault = 60;
 		ArrayList<PotionEffect> effects = new ArrayList<PotionEffect>();
@@ -370,20 +476,22 @@ public class ConfigSerializer extends BaseSerializer{
 			String str = null;
 			for (Object o : cs.getList(nodeString)){
 				str = o.toString();
-				PotionEffect ewa = EffectUtil.parseArg(str,strengthDefault,timeDefault);
-				if (ewa != null) {
+				try{
+					PotionEffect ewa = EffectUtil.parseArg(str,strengthDefault,timeDefault);
 					effects.add(ewa);
-				} else {
-					Log.warn(cs.getCurrentPath() +"."+nodeString + " could not be parsed in config.yml");
+				} catch (Exception e){
+					Log.err("Effect "+cs.getCurrentPath() +"."+nodeString +"."+str+ " could not be parsed in classes.yml");
 				}
 			}
 		} catch (Exception e){
-			Log.warn(cs.getCurrentPath() +"."+nodeString + " could not be parsed in config.yml");
+			Log.err("Effect "+cs.getCurrentPath() +"."+nodeString + " could not be parsed in classes.yml");
 		}
 		return effects;
 	}
 
 	public static ArrayList<ItemStack> getItemList(ConfigurationSection cs, String nodeString) {
+		if (cs == null || cs.getList(nodeString) == null)
+			return null;
 		ArrayList<ItemStack> items = new ArrayList<ItemStack>();
 		try {
 			String str = null;
@@ -394,16 +502,32 @@ public class ConfigSerializer extends BaseSerializer{
 					if (is != null){
 						items.add(is);
 					} else {
-						Log.warn(cs.getCurrentPath() +"."+nodeString + " couldnt parse item " + str);
+						Log.err(cs.getCurrentPath() +"."+nodeString + " couldnt parse item " + str);
 					}
 				} catch (Exception e){
-					Log.warn(cs.getCurrentPath() +"."+nodeString + " couldnt parse item " + str);
+					Log.err(cs.getCurrentPath() +"."+nodeString + " couldnt parse item " + str);
+					e.printStackTrace();
 				}
 			}
 		} catch (Exception e){
-			Log.warn(cs.getCurrentPath() +"."+nodeString + " could not be parsed in config.yml");
+			Log.err(cs.getCurrentPath() +"."+nodeString + " could not be parsed in config.yml");
+			e.printStackTrace();
 		}
 		return items;
+	}
+
+	public static JoinType getJoinType(ConfigurationSection cs) {
+		boolean isMatch = !cs.getBoolean("isEvent",true);
+		isMatch = cs.getBoolean("queue",isMatch);
+		if (cs.contains("joinType")){
+			String type = cs.getString("joinType");
+			try{
+				return JoinType.valueOf(type.toUpperCase());
+			} catch (Exception e){
+				e.printStackTrace();
+			}
+		}
+		return isMatch ? JoinType.QUEUE : JoinType.JOINPHASE;
 	}
 
 

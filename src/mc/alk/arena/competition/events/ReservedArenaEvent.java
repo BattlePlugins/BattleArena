@@ -1,5 +1,7 @@
 package mc.alk.arena.competition.events;
 
+import java.util.List;
+
 import mc.alk.arena.BattleArena;
 import mc.alk.arena.Defaults;
 import mc.alk.arena.competition.match.ArenaMatch;
@@ -11,13 +13,17 @@ import mc.alk.arena.events.matches.MatchPlayersReadyEvent;
 import mc.alk.arena.objects.ArenaPlayer;
 import mc.alk.arena.objects.EventParams;
 import mc.alk.arena.objects.arenas.Arena;
-import mc.alk.arena.objects.events.TransitionEventHandler;
+import mc.alk.arena.objects.events.MatchEventHandler;
 import mc.alk.arena.objects.exceptions.NeverWouldJoinException;
+import mc.alk.arena.objects.queues.TeamQObject;
 import mc.alk.arena.objects.teams.Team;
 import mc.alk.arena.objects.tournament.Matchup;
 import mc.alk.arena.objects.tournament.Round;
+import mc.alk.arena.objects.victoryconditions.VictoryCondition;
+import mc.alk.arena.objects.victoryconditions.interfaces.DefinesLeaderRanking;
 import mc.alk.arena.util.Countdown;
-import mc.alk.arena.util.Util;
+import mc.alk.arena.util.MessageUtil;
+import mc.alk.arena.util.TeamUtil;
 
 public class ReservedArenaEvent extends Event {
 	public ReservedArenaEvent(EventParams params) {
@@ -39,16 +45,28 @@ public class ReservedArenaEvent extends Event {
 		timer = new Countdown(BattleArena.getSelf(),mp.getSecondsTillStart(), mp.getAnnouncementInterval(), this);
 	}
 
-	public void openAllPlayersEvent(EventParams mp, Arena arena) throws NeverWouldJoinException {
-		arenaMatch = new ArenaMatch(arena, mp);
-		super.openAllPlayersEvent(mp);
+	@Override
+	public String getStatus() {
+		StringBuilder sb = new StringBuilder(super.getStatus());
+		List<VictoryCondition> vcs = arenaMatch.getVictoryConditions();
+		for (VictoryCondition vc: vcs){
+			if (vc instanceof DefinesLeaderRanking){
+				List<Team> leaders = ((DefinesLeaderRanking)vc).getRankings();
+				sb.append("\n");
+				for (int i = 0;i<leaders.size();i++){
+					sb.append("&6"+(i+1) +"&e : "+TeamUtil.formatName(leaders.get(i))+"\n");
+				}
+				break;
+			}
+		}
+		return sb.toString();
 	}
 
 	@Override
 	public void openEvent(EventParams mp) throws NeverWouldJoinException{
 		super.openEvent(mp);
 		rounds.clear();
-		arenaMatch.addTransitionListener(this);
+		arenaMatch.addArenaListener(this);
 		ac.openMatch(arenaMatch);
 		arenaMatch.onJoin(teams);
 	}
@@ -61,55 +79,45 @@ public class ReservedArenaEvent extends Event {
 		startRound();
 	}
 
-	@TransitionEventHandler
+	@MatchEventHandler
 	public void allPlayersReady(MatchPlayersReadyEvent event){
 		if (joinHandler != null && joinHandler.hasEnough(true)){
 			startEvent();
 		}
 	}
 
-	@TransitionEventHandler
+	@MatchEventHandler
 	public void matchCompleted(MatchCompletedEvent event){
 		if (Defaults.DEBUG_TRACE) System.out.println("ReservedArenaEvent::matchComplete " +arenaMatch +"   isRunning()=" + isRunning());
-		Team victor = event.getMatch().getResult().getVictor();
 
-		Matchup m;
-		if (victor == null)
-			m = getMatchup(event.getMatch().getResult().getLosers().iterator().next());
-		else
-			 m = getMatchup(victor);
-		if (m == null){
-			return;
-		}
-		m.setResult(arenaMatch.getResult());
-		eventVictory(victor,m.getResult().getLosers());
+		setEventResult(arenaMatch.getResult());
 	}
 
-	@TransitionEventHandler
+	@MatchEventHandler
 	public void matchFinished(MatchFinishedEvent event){
 		eventCompleted();
 	}
 
 	@Override
-	public TeamJoinResult joining(Team t){
-		TeamJoinResult tjr = super.joining(t);
+	public TeamJoinResult joining(TeamQObject tqo){
+		TeamJoinResult tjr = super.joining(tqo);
 		switch(tjr.getEventType()){
 		case ADDED:
 			/// The first time, add the entire team
 			arenaMatch.onJoin(tjr.team);
 			break;
 		case ADDED_TO_EXISTING:
+			Team t = tqo.getTeam();
 			if (arenaMatch.hasTeam(tjr.team)){
 				for (ArenaPlayer p : t.getPlayers()){/// subsequent times, just the new players
 					/// dont call arenaMatch.onJoin(Team), as part of the team might already be in arena
 					arenaMatch.addedToTeam(tjr.team,p);
 				}
 			}
-			String str = Util.playersToCommaDelimitedString(t.getPlayers());
+			String str = MessageUtil.joinPlayers(t.getPlayers(), ", ");
 			for (ArenaPlayer p : t.getPlayers()){
 				tjr.team.sendToOtherMembers(p, str +" has joined the team!");
 			}
-
 			break;
 		default:
 		}
@@ -127,7 +135,7 @@ public class ReservedArenaEvent extends Event {
 
 	private void makeNextRound() {
 		Matchup m = new Matchup(eventParams,teams);
-		m.addTransitionListener(this);
+		m.addArenaListener(this);
 		Round tr = new Round(0);
 		tr.addMatchup(m);
 		rounds.add(tr);
@@ -169,15 +177,10 @@ public class ReservedArenaEvent extends Event {
 
 	@Override
 	public boolean leave(ArenaPlayer p){
-		Team t = getTeam(p);
-		if (t==null) /// they arent in this Event
-			return true;
-
-		boolean canLeave = super.leave(p);
-		if (canLeave){
-			arenaMatch.onLeave(p);
-		}
-		return canLeave;
+		arenaMatch.onLeave(p);
+		return super.leave(p);
 	}
-
+	public Match getMatch(){
+		return arenaMatch;
+	}
 }

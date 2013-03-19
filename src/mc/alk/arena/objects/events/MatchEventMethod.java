@@ -12,18 +12,17 @@ public class MatchEventMethod implements Comparable<MatchEventMethod>{
 	final Method getPlayerMethod;
 	final MatchState beginState, endState, cancelState;
 	final EventPriority priority;
+	final org.bukkit.event.EventPriority bukkitPriority;
+
 	public MatchEventMethod(Method callMethod, Class<? extends Event> event,
-			MatchState begin, MatchState end, MatchState cancel, EventPriority priority) {
-		this.callMethod = callMethod;
-		this.bukkitEvent = event;
-		this.getPlayerMethod = null;
-		this.beginState = begin;
-		this.endState = end;
-		this.cancelState = cancel;
-		this.priority = priority;
+			MatchState begin, MatchState end, MatchState cancel, EventPriority priority,
+			org.bukkit.event.EventPriority bukkitPriority) {
+		this(callMethod,event,null,begin,end,cancel,priority, bukkitPriority);
 	}
-	public MatchEventMethod(Method callMethod, Class<? extends Event> event,
-			Method getPlayerMethod, MatchState begin, MatchState end, MatchState cancel, EventPriority priority) {
+
+	public MatchEventMethod(Method callMethod, Class<? extends Event> event,Method getPlayerMethod,
+			MatchState begin, MatchState end, MatchState cancel, EventPriority priority,
+			org.bukkit.event.EventPriority bukkitPriority) {
 		this.callMethod = callMethod;
 		this.bukkitEvent = event;
 		this.getPlayerMethod = getPlayerMethod;
@@ -31,33 +30,55 @@ public class MatchEventMethod implements Comparable<MatchEventMethod>{
 		this.endState = end;
 		this.cancelState = cancel;
 		this.priority = priority;
+		this.bukkitPriority = bukkitPriority;
 	}
+
+
+	public boolean isSpecificPlayerMethod() {
+		return getPlayerMethod != null;
+	}
+
+	public EventPriority getPriority(){
+		return priority;
+	}
+
 	public Method getMethod(){
 		return callMethod;
 	}
+
 	public Method getPlayerMethod(){
 		return getPlayerMethod;
 	}
+
 	public Class<? extends Event> getBukkitEvent(){
 		return bukkitEvent;
 	}
+
 	public MatchState getBeginState() {
 		return beginState;
 	}
+
 	public MatchState getEndState() {
 		return endState;
 	}
+
 	public MatchState getCancelState() {
 		return cancelState;
 	}
+
 	@Override
 	public String toString(){
-		return "[MEM "+callMethod.getName()+", " + bukkitEvent.getSimpleName()+ " "  + beginState+":"+endState+
-				"   playerMethod=" + getPlayerMethod.getName()+"]";
+		return "[MEM "+callMethod.getName()+", " + (bukkitEvent != null ? bukkitEvent.getSimpleName():"null")+
+				" p="+bukkitPriority+" "  + beginState+":"+endState+"   playerMethod=" + getPlayerMethod+"]";
 	}
 
 	@Override
 	public int compareTo(MatchEventMethod arg0) {
 		return this.priority.compareTo(arg0.priority);
 	}
+
+	public org.bukkit.event.EventPriority getBukkitPriority() {
+		return bukkitPriority;
+	}
+
 }

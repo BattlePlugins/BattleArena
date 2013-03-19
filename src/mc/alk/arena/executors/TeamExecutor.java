@@ -10,16 +10,16 @@ import mc.alk.arena.BattleArena;
 import mc.alk.arena.Defaults;
 import mc.alk.arena.competition.events.Event;
 import mc.alk.arena.controllers.EventController;
+import mc.alk.arena.controllers.HeroesController;
 import mc.alk.arena.controllers.PlayerController;
 import mc.alk.arena.controllers.TeamController;
 import mc.alk.arena.objects.ArenaPlayer;
 import mc.alk.arena.objects.teams.FormingTeam;
 import mc.alk.arena.objects.teams.Team;
 import mc.alk.arena.objects.teams.TeamHandler;
-import mc.alk.arena.util.Util;
+import mc.alk.arena.util.ServerUtil;
 
 import org.bukkit.ChatColor;
-import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -44,7 +44,7 @@ public class TeamExecutor extends CustomCommandExecutor {
 		return sendMessage(sender,sb.toString());
 	}
 
-	@MCCommand(cmds={"listDetailed"},op=true,usage="listDetailed")
+	@MCCommand(cmds={"listDetailed"},admin=true,usage="listDetailed")
 	public boolean teamListDetails(CommandSender sender) {
 		StringBuilder sb = new StringBuilder();
 		Map<Team,CopyOnWriteArrayList<TeamHandler>> teams = teamc.getTeams();
@@ -64,7 +64,7 @@ public class TeamExecutor extends CustomCommandExecutor {
 		return sendMessage(sender,sb.toString());
 	}
 
-	@MCCommand(cmds={"join"},inGame=true,usage="join")
+	@MCCommand(cmds={"join"}, usage="join", perm="arena.team.join")
 	public boolean teamJoin(ArenaPlayer player) {
 
 		Team t = teamc.getSelfFormedTeam(player);
@@ -95,7 +95,7 @@ public class TeamExecutor extends CustomCommandExecutor {
 		return true;
 	}
 
-	@MCCommand(cmds={"create"},inGame=true,usage="create <player 1> <player 2>...<player x>")
+	@MCCommand(cmds={"create"}, usage="create <player 1> <player 2>...<player x>", perm="arena.team.create")
 	public boolean teamCreate(ArenaPlayer player, String[] args) {
 		if (args.length<2){
 			sendMessage(player,ChatColor.YELLOW + "create <player 1> <player 2>...<player x>");
@@ -113,7 +113,7 @@ public class TeamExecutor extends CustomCommandExecutor {
 		if (players.contains(player.getName()))
 			return sendMessage(player,ChatColor.YELLOW + "You can not invite yourself to a team");
 
-		Util.findOnlinePlayers(players, foundplayers,unfoundplayers);
+		ServerUtil.findOnlinePlayers(players, foundplayers,unfoundplayers);
 		if (foundplayers.size() < players.size()){
 			sendMessage(player,ChatColor.YELLOW + "The following teammates were not found or were not online");
 			StringBuilder sb = new StringBuilder();
@@ -128,10 +128,9 @@ public class TeamExecutor extends CustomCommandExecutor {
 		}
 		Set<ArenaPlayer> foundArenaPlayers = PlayerController.toArenaPlayerSet(foundplayers);
 		for (ArenaPlayer p: foundArenaPlayers){
-
 			if (Defaults.DEBUG){System.out.println("player=" + player.getName());}
 			Team t = teamc.getSelfFormedTeam(p);
-			if (t!= null || !bae.canJoin(p)){
+			if (t!= null || !bae.canJoin(p,false)){
 				sendMessage(player,"&6"+ p.getName() + "&e is already part of a team or is in an Event");
 				return sendMessage(player,"&eCreate team &4cancelled!");
 			}
@@ -161,7 +160,7 @@ public class TeamExecutor extends CustomCommandExecutor {
 		return true;
 	}
 
-	@MCCommand(cmds={"info"},inGame=true, usage="info")
+	@MCCommand(cmds={"info"}, usage="info")
 	public boolean teamInfo(ArenaPlayer player) {
 		Map<TeamHandler,Team> teams = teamc.getTeamMap(player);
 		if (teams == null || teams.isEmpty()){
@@ -189,7 +188,7 @@ public class TeamExecutor extends CustomCommandExecutor {
 		return true;
 	}
 
-	@MCCommand(cmds={"disband","leave"},usage="disband", inGame=true)
+	@MCCommand(cmds={"disband","leave"},usage="disband")
 	public boolean teamDisband(ArenaPlayer player) {
 		/// Try to disband a forming team first
 		FormingTeam ft = teamc.getFormingTeam(player);
@@ -205,6 +204,9 @@ public class TeamExecutor extends CustomCommandExecutor {
 		Team t = teamc.getSelfFormedTeam(player);
 		if (t== null){
 			return sendMessage(player,"&eYou aren't part of a team");}
+
+		if (HeroesController.enabled()){
+			HeroesController.removedFromTeam(t, player.getPlayer());}
 
 		teamc.removeSelfFormedTeam(t);
 		t.sendToOtherMembers(player,"&eYour team has been disbanded by " + player.getName());
@@ -228,7 +230,7 @@ public class TeamExecutor extends CustomCommandExecutor {
 		return true;
 	}
 
-	@MCCommand(cmds={"delete"},admin=true,online={1}, usage="delete")
+	@MCCommand(cmds={"delete"}, usage="delete")
 	public boolean teamDelete(CommandSender sender, ArenaPlayer player) {
 		Team t = teamc.getSelfFormedTeam(player);
 		if (t== null){
@@ -244,7 +246,7 @@ public class TeamExecutor extends CustomCommandExecutor {
 	}
 
 
-	@MCCommand(cmds={"decline"},inGame=true, usage="decline")
+	@MCCommand(cmds={"decline"}, usage="decline")
 	public boolean teamDecline(ArenaPlayer p) {
 		FormingTeam t = teamc.getFormingTeam(p);
 		if (t== null){
@@ -255,11 +257,4 @@ public class TeamExecutor extends CustomCommandExecutor {
 		teamc.removeFormingTeam(t);
 		return true;
 	}
-
-
-	@MCCommand( cmds = {"help","?"})
-	public void help(CommandSender sender, Command command, String label, Object[] args){
-		super.help(sender, command, args);
-	}
-
 }

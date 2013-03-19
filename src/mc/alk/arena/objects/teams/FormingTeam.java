@@ -8,8 +8,12 @@ import mc.alk.arena.util.MessageUtil;
 
 
 
-public class FormingTeam extends Team{
+public class FormingTeam extends AbstractTeam{
 	Set<ArenaPlayer> joined_players = new HashSet<ArenaPlayer>();
+
+	public FormingTeam(){
+		super();
+	}
 
 	public FormingTeam(ArenaPlayer p, Set<ArenaPlayer> teammates) {
 		super(p,teammates);
@@ -28,7 +32,7 @@ public class FormingTeam extends Team{
 		ps.removeAll(joined_players);
 		return ps;
 	}
-	
+
 	public void sendJoinedPlayersMessage(String message) {
 		for (ArenaPlayer p: joined_players){
 			MessageUtil.sendMessage(p, message);
@@ -42,8 +46,13 @@ public class FormingTeam extends Team{
 			MessageUtil.sendMessage(p, message);
 		}
 	}
-	
+
 	public boolean hasAllPlayers() {return joined_players.size() == players.size();}
+
+	@Override
+	public boolean isReady() {
+		return false;
+	}
 
 }
 

@@ -10,33 +10,28 @@ import mc.alk.arena.events.events.EventFinishedEvent;
 import mc.alk.arena.executors.EventExecutor;
 import mc.alk.arena.executors.ReservedArenaEventExecutor;
 import mc.alk.arena.executors.TournamentExecutor;
-import mc.alk.arena.listeners.TransitionListener;
+import mc.alk.arena.listeners.ArenaListener;
 import mc.alk.arena.objects.EventParams;
-import mc.alk.arena.objects.events.TransitionEventHandler;
+import mc.alk.arena.objects.events.MatchEventHandler;
 import mc.alk.arena.objects.exceptions.InvalidEventException;
 import mc.alk.arena.objects.exceptions.InvalidOptionException;
 import mc.alk.arena.objects.pairs.EventPair;
 import mc.alk.arena.util.Log;
+import mc.alk.arena.util.TimeUtil;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.craftbukkit.command.ColouredConsoleSender;
 
-public class EventScheduler implements Runnable, TransitionListener{
+public class EventScheduler implements Runnable, ArenaListener{
 
 	int curEvent = 0;
-	Long delay = 5L;
 	boolean continuous= false;
 	boolean running = false;
 	boolean stop = false;
+	Integer currentTimer = null;
 
 	final CopyOnWriteArrayList<EventPair> events = new CopyOnWriteArrayList<EventPair>();
-
-	public boolean scheduleEvent(EventParams eventParams, String[] args) {
-		events.add(new EventPair(eventParams,args)); /// TODO verify these arguments here instead of waiting until running them
-		return true;
-	}
 
 	@Override
 	public void run() {
@@ -45,7 +40,7 @@ public class EventScheduler implements Runnable, TransitionListener{
 		running = true;
 		int index = curEvent % events.size();
 		curEvent++;
-		Bukkit.getScheduler().scheduleSyncDelayedTask(BattleArena.getSelf(), new RunEvent(this, events.get(index)));
+		currentTimer = Bukkit.getScheduler().scheduleSyncDelayedTask(BattleArena.getSelf(), new RunEvent(this, events.get(index)));
 	}
 
 	public class RunEvent implements Runnable{
@@ -59,16 +54,15 @@ public class EventScheduler implements Runnable, TransitionListener{
 		public void run() {
 			if (stop)
 				return;
+
 			EventExecutor ee = EventController.getEventExecutor(eventPair.getEventParams().getName());
 			if (ee == null){
 				Log.err("executor for " + eventPair.getEventParams() +" was not found");
 				return;
 			}
-			CommandSender sender = ColouredConsoleSender.getInstance();
+			CommandSender sender = Bukkit.getConsoleSender();
 			EventParams eventParams = eventPair.getEventParams();
-			//			event.addTransitionListener(scheduler);
 			String args[] = eventPair.getArgs();
-			//			boolean success = false;
 			Event event = null;
 			try {
 				if (ee instanceof ReservedArenaEventExecutor){
@@ -85,24 +79,28 @@ public class EventScheduler implements Runnable, TransitionListener{
 			} catch (Exception e){
 				e.printStackTrace();
 			}
+			if (Defaults.DEBUG_SCHEDULER) Log.info("[BattleArena debugging] Running event ee=" + ee  +"  event" + event +"  args=" + args);
 			if (event != null){
-				event.addTransitionListener(scheduler);
+				event.addArenaListener(scheduler);
 			} else {  /// wait then start up the scheduler again in x seconds
-				Bukkit.getScheduler().scheduleAsyncDelayedTask(BattleArena.getSelf(),
+				currentTimer = Bukkit.getScheduler().scheduleAsyncDelayedTask(BattleArena.getSelf(),
 						scheduler, 20L*Defaults.TIME_BETWEEN_SCHEDULED_EVENTS);
 			}
 		}
 	}
 
-	@TransitionEventHandler
+	@MatchEventHandler
 	public void onEventFinished(EventFinishedEvent event){
 		Event e = event.getEvent();
-		e.removeTransitionListener(this);
+		e.removeArenaListener(this);
 		if (continuous){
+			if (Defaults.DEBUG_SCHEDULER) Log.info("[BattleArena debugging] finished event "+ e+"  scheduling next event in "+ 20L*Defaults.TIME_BETWEEN_SCHEDULED_EVENTS + " ticks");
+
 			/// Wait x sec then start the next event
-			Bukkit.getScheduler().scheduleAsyncDelayedTask(BattleArena.getSelf(), this, (long) (20L*Defaults.TIME_BETWEEN_SCHEDULED_EVENTS*Defaults.TICK_MULT));
+			Bukkit.getScheduler().scheduleAsyncDelayedTask(BattleArena.getSelf(), this, 20L*Defaults.TIME_BETWEEN_SCHEDULED_EVENTS);
 			if (Defaults.SCHEDULER_ANNOUNCE_TIMETILLNEXT){
-				Bukkit.getServer().broadcastMessage(ChatColor.GOLD+"Next event will start in "+Defaults.TIME_BETWEEN_SCHEDULED_EVENTS+" seconds");}
+				Bukkit.getServer().broadcastMessage(ChatColor.GOLD+"Next event will start in "+
+						TimeUtil.convertSecondsToString(Defaults.TIME_BETWEEN_SCHEDULED_EVENTS));}
 		} else {
 			running = false;
 		}
@@ -130,14 +128,20 @@ public class EventScheduler implements Runnable, TransitionListener{
 
 	public void startNext() {
 		continuous = false;
-		if (running)
-			return;
+		if (currentTimer != null)
+			Bukkit.getScheduler().cancelTask(currentTimer);
 		stop = false;
 		new Thread(this).start();
 	}
 
-	public void deleteEvent(int i) {
-		events.remove(i);
+
+	public boolean scheduleEvent(EventParams eventParams, String[] args) {
+		events.add(new EventPair(eventParams,args)); /// TODO verify these arguments here instead of waiting until running them
+		return true;
+	}
+
+	public EventPair deleteEvent(int i) {
+		return events.remove(i);
 	}
 
 }

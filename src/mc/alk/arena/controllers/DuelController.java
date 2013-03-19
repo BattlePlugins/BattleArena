@@ -2,9 +2,11 @@ package mc.alk.arena.controllers;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import mc.alk.arena.BattleArena;
@@ -12,20 +14,22 @@ import mc.alk.arena.Defaults;
 import mc.alk.arena.competition.match.Match;
 import mc.alk.arena.events.matches.MatchCancelledEvent;
 import mc.alk.arena.events.matches.MatchCompletedEvent;
-import mc.alk.arena.listeners.TransitionListener;
+import mc.alk.arena.listeners.ArenaListener;
+import mc.alk.arena.listeners.MatchCreationCallback;
 import mc.alk.arena.objects.ArenaPlayer;
 import mc.alk.arena.objects.Duel;
 import mc.alk.arena.objects.MatchResult;
-import mc.alk.arena.objects.events.TransitionEventHandler;
+import mc.alk.arena.objects.events.MatchEventHandler;
 import mc.alk.arena.objects.options.DuelOptions.DuelOption;
 import mc.alk.arena.objects.teams.Team;
 import mc.alk.arena.objects.tournament.Matchup;
 import mc.alk.arena.util.MessageUtil;
 
-public class DuelController implements TransitionListener{
+public class DuelController implements ArenaListener, MatchCreationCallback{
 	List<Duel> formingDuels = new CopyOnWriteArrayList<Duel>();
 	HashMap<String, Long> rejectTimers = new HashMap<String,Long>();
 	HashMap<Matchup,Duel> ongoingDuels = new HashMap<Matchup,Duel>();
+	Map<Match, Matchup> matchups = Collections.synchronizedMap(new HashMap<Match,Matchup>());
 
 	public void addOutstandingDuel(Duel duel) {
 		formingDuels.add(duel);
@@ -46,19 +50,20 @@ public class DuelController implements TransitionListener{
 				teams.add(t);
 				teams.add(t2);
 				Matchup m = new Matchup(d.getMatchParams(),teams);
-				m.addTransitionListener(this);
+				m.addArenaListener(this);
+				m.addMatchCreationListener(this);
 				formingDuels.remove(d);
 				ongoingDuels.put(m, d);
-				BattleArena.getBAC().addMatchup(m);
+				BattleArena.getBAController().addMatchup(m);
 			}
 		}
 		return d;
 	}
 
-	@TransitionEventHandler
+	@MatchEventHandler
 	public void matchCancelled(MatchCancelledEvent event){
 		Match match = event.getMatch();
-		Matchup matchup = findMatchup(match);
+		Matchup matchup = matchups.remove(match);
 		if (matchup == null)
 			return;
 		Duel d = ongoingDuels.remove(matchup);
@@ -78,10 +83,10 @@ public class DuelController implements TransitionListener{
 		}
 	}
 
-	@TransitionEventHandler
+	@MatchEventHandler
 	public void matchComplete(MatchCompletedEvent event){
 		Match match = event.getMatch();
-		Matchup matchup = findMatchup(match);
+		Matchup matchup = matchups.remove(match);
 		if (matchup == null)
 			return;
 		Duel d = ongoingDuels.remove(matchup);
@@ -92,11 +97,16 @@ public class DuelController implements TransitionListener{
 		Double money = (Double) d.getDuelOptionValue(DuelOption.MONEY);
 		if (money != null){
 			if (mr.hasVictor()){
-				Team t = mr.getVictor();
-				double split = d.getTotalMoney() / t.size();
-				for (ArenaPlayer ap: t.getPlayers()){
-					MessageUtil.sendMessage(ap,"&4[Duel] &eYou have won &6" + split +" "+Defaults.MONEY_STR+"&e for your victory!");
-					MoneyController.add(ap.getName(), split);
+				Collection<Team> winningTeams = mr.getVictors();
+				int winningSize = 0;
+				for (Team winTeam : winningTeams){
+					winningSize += winTeam.size();}
+				final double split = d.getTotalMoney() / winningSize;
+				for (Team winTeam : winningTeams){
+					for (ArenaPlayer ap: winTeam.getPlayers()){
+						MessageUtil.sendMessage(ap,"&4[Duel] &eYou have won &6" + split +" "+Defaults.MONEY_STR+"&e for your victory!");
+						MoneyController.add(ap.getName(), split);
+					}
 				}
 			} else {
 				refundMoney(money, mr.getDrawers());
@@ -104,14 +114,11 @@ public class DuelController implements TransitionListener{
 		}
 	}
 
-	public Matchup findMatchup(Match match){
-		for (Matchup matchup: ongoingDuels.keySet()){
-			if (matchup.getMatch().getID() == match.getID() ){
-				return matchup;
-			}
-		}
-		return null;
+	@Override
+	public void matchCreated(Match match, Matchup matchup) {
+		matchups.put(match, matchup);
 	}
+
 	private boolean checkWager(Duel d) {
 		Double wager = (Double) d.getDuelOptionValue(DuelOption.MONEY);
 		if (wager == null)

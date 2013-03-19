@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import mc.alk.arena.BattleArena;
 import mc.alk.arena.objects.ArenaPlayer;
+import mc.alk.arena.objects.ArenaSize;
 import mc.alk.arena.objects.MatchParams;
 import mc.alk.arena.objects.arenas.Arena;
 import mc.alk.arena.objects.exceptions.InvalidOptionException;
@@ -15,7 +16,7 @@ import mc.alk.arena.util.TeamUtil;
 
 import org.bukkit.Location;
 
-public class JoinOptions {
+public class JoinOptions extends ArenaSize{
 	public static enum JoinOption{
 		ARENA("<arena>",false), TEAM("<team>",false), TEAMSIZE("<teamSize>",false);
 
@@ -49,21 +50,28 @@ public class JoinOptions {
 		}
 	}
 
-
+	/** All options for joining */
 	final Map<JoinOption,Object> options = new EnumMap<JoinOption,Object>(JoinOption.class);
+
+	/** Location they have joined from */
 	Location joinedLocation = null;
 
-	public boolean matches(Arena a) {
-		return options.containsKey(JoinOption.ARENA) ?
-				((Arena)options.get(JoinOption.ARENA)).getName().equals(a.getName()) : true;
+	/** Specific arena or match size.  Is the user requesting a special arena or match size */
+	boolean specific = false;
+
+	/** When the player joined, can be null */
+	Long joinTime;
+
+	public boolean matches(Arena arena) {
+		if (options.containsKey(JoinOption.ARENA)){
+			Arena a = (Arena) options.get(JoinOption.ARENA);
+			return a != null ? arena.matches(a) : false;
+		}
+		return true;
 	}
 
 	public boolean matches(MatchParams params) {
-		if (options.containsKey(JoinOption.TEAMSIZE)){
-			WantedTeamSizePair wtsp = (WantedTeamSizePair)options.get(JoinOption.TEAMSIZE);
-			return wtsp.manuallySet ? params.matchesTeamSize(getTeamSize()) : true;
-		}
-		return true;
+		return matchesTeamSize(params);
 	}
 
 	public boolean nearby(Arena arena, double distance) {
@@ -71,13 +79,13 @@ public class JoinOptions {
 		Location arenajoinloc = arena.getJoinLocation();
 		if (arenajoinloc != null){
 			return (wid == arenajoinloc.getWorld().getUID() &&
-					arenajoinloc.distanceSquared(joinedLocation) <= distance);
+					arenajoinloc.distance(joinedLocation) <= distance);
 		}
 
 		for (Location l : arena.getSpawnLocs().values()){
 			if (l.getWorld().getUID() != wid)
 				return false;
-			if (l.distanceSquared(joinedLocation) <= distance)
+			if (l.distance(joinedLocation) <= distance)
 				return true;
 		}
 		return false;
@@ -99,24 +107,34 @@ public class JoinOptions {
 	public static JoinOptions parseOptions(MatchParams mp, Team t, ArenaPlayer player, String[] args)
 			throws InvalidOptionException, NumberFormatException{
 		JoinOptions jos = new JoinOptions();
+		jos.setJoinTime(System.currentTimeMillis());
 		jos.joinedLocation = player.getLocation();
 		Map<JoinOption,Object> ops = jos.options;
 		Arena arena = null;
 		String lastArg = args.length - 1 >= 0 ? args[args.length-1] : "";
 		final WantedTeamSizePair teamSize = WantedTeamSizePair.getWantedTeamSize(player,t,mp,lastArg);
-		int length = teamSize.manuallySet ? args.length -1 : args.length;
+		int length = args.length;
+		if (teamSize.manuallySet){
+			length = args.length -1;
+			jos.setTeamSize(teamSize.size);
+			jos.specific = true;
+		}
+
 		ops.put(JoinOption.TEAMSIZE, teamSize);
 		for (int i=0;i<length;i++){
 			String op = args[i];
 			if (op.isEmpty())
 				continue;
 			Object obj = null;
-			Arena a = BattleArena.getBAC().getArena(op);
+			Arena a = BattleArena.getBAController().getArena(op);
 			if (a != null){
+				if (!a.valid()){
+					throw new InvalidOptionException("&cThe specified arena is not valid!");}
 				if (arena != null){
 					throw new InvalidOptionException("&cYou specified 2 arenas!");}
 				arena = a;
 				ops.put(JoinOption.ARENA, arena);
+				jos.specific = true;
 				continue;
 			}
 			Integer teamIndex = TeamUtil.getTeamIndex(op);
@@ -145,7 +163,7 @@ public class JoinOptions {
 			String val = args[++i];
 			switch(jo){
 			case ARENA:
-				obj = BattleArena.getBAC().getArena(val);
+				obj = BattleArena.getBAController().getArena(val);
 				if (obj==null){
 					throw new InvalidOptionException("&cCouldnt find the arena &6" +val);}
 			default:
@@ -154,6 +172,14 @@ public class JoinOptions {
 			ops.put(jo, obj);
 		}
 		return jos;
+	}
+
+	public void setJoinTime(Long currentTimeMillis) {
+		this.joinTime = currentTimeMillis;
+	}
+
+	public Long getJoinTime(){
+		return joinTime;
 	}
 
 	public String optionsString(MatchParams mp) {
@@ -172,9 +198,11 @@ public class JoinOptions {
 			return ((WantedTeamSizePair)options.get(JoinOption.TEAMSIZE)).manuallySet;}
 		return false;
 	}
+
 	public Integer getTeamSize(){
 		return ((WantedTeamSizePair)options.get(JoinOption.TEAMSIZE)).size;
 	}
+
 	public boolean hasOption(JoinOption option) {
 		return options.containsKey(option);
 	}
@@ -183,4 +211,7 @@ public class JoinOptions {
 		return options.get(option);
 	}
 
+	public boolean isSpecific(){
+		return specific;
+	}
 }

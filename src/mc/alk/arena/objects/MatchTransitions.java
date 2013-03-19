@@ -1,40 +1,64 @@
 package mc.alk.arena.objects;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import mc.alk.arena.objects.options.TransitionOption;
 import mc.alk.arena.objects.options.TransitionOptions;
-import mc.alk.arena.objects.options.TransitionOptions.TransitionOption;
 import mc.alk.arena.objects.teams.Team;
 import mc.alk.arena.util.InventoryUtil;
 
+import org.bukkit.World;
 import org.bukkit.inventory.ItemStack;
 
 public class MatchTransitions {
-	Map<MatchState,TransitionOptions> ops = new EnumMap<MatchState,TransitionOptions>(MatchState.class);
+	final Map<MatchState,TransitionOptions> ops = new EnumMap<MatchState,TransitionOptions>(MatchState.class);
+	final Set<TransitionOption> allops = new HashSet<TransitionOption>();
 
 	public MatchTransitions() {}
 	public MatchTransitions(MatchTransitions o) {
 		for (MatchState ms: o.ops.keySet()){
 			ops.put(ms, new TransitionOptions(o.ops.get(ms)));
 		}
+		calculateAllOptions();
 	}
 
-	public void addTransition(MatchState ms, TransitionOptions tops) {
+	public void addTransitionOptions(MatchState ms, TransitionOptions tops) {
 		ops.put(ms, tops);
+		Map<TransitionOption,Object> ops = tops.getOptions();
+		if (ops != null)
+			allops.addAll(ops.keySet());
 	}
 
-	public boolean hasOptions(TransitionOption... options) {
+	public void removeTransitionOptions(MatchState ms) {
+		ops.remove(ms);
+		calculateAllOptions();
+	}
+
+	private void calculateAllOptions(){
+		allops.clear();
+		for (TransitionOptions top: ops.values()){
+			allops.addAll(top.getOptions().keySet());
+		}
+	}
+
+	public boolean hasAnyOption(TransitionOption... options) {
 		for (TransitionOption op: options){
-			for (TransitionOptions tops : ops.values()){
-				if (tops.hasOption(op))
-					return true;
-			}
+			if (allops.contains(op))
+				return true;
 		}
 		return false;
+	}
+
+	public boolean hasAllOptions(TransitionOption... options) {
+		Set<TransitionOption> ops = new HashSet<TransitionOption>(Arrays.asList(options));
+		return allops.containsAll(ops);
 	}
 
 	public boolean hasOptionAt(MatchState state, TransitionOption option) {
@@ -46,16 +70,12 @@ public class MatchTransitions {
 		return ops.containsKey(MatchState.PREREQS) ? ops.get(MatchState.PREREQS).clearInventory() : false;
 	}
 
-	public void removeOptions(MatchState ms) {
-		ops.remove(ms);
-	}
-
 	public String getRequiredString(String header) {
 		return ops.containsKey(MatchState.PREREQS) ? ops.get(MatchState.PREREQS).getNotReadyMsg(header): null;
 	}
 
-	public String getRequiredString(ArenaPlayer p, String header) {
-		return ops.containsKey(MatchState.PREREQS) ? ops.get(MatchState.PREREQS).getNotReadyMsg(p,header): null;
+	public String getRequiredString(ArenaPlayer p, World w, String header) {
+		return ops.containsKey(MatchState.PREREQS) ? ops.get(MatchState.PREREQS).getNotReadyMsg(p,w,header): null;
 	}
 
 	public String getGiveString(MatchState ms) {
@@ -74,16 +94,16 @@ public class MatchTransitions {
 		return ops.containsKey(MatchState.PREREQS) ? ops.get(MatchState.PREREQS).hasMoney() : false;
 	}
 
-	public boolean playerReady(ArenaPlayer p) {
-		return ops.containsKey(MatchState.PREREQS) ? ops.get(MatchState.PREREQS).playerReady(p): true;
+	public boolean playerReady(ArenaPlayer p, World w) {
+		return ops.containsKey(MatchState.PREREQS) ? ops.get(MatchState.PREREQS).playerReady(p,w): true;
 	}
 
-	public boolean teamReady(Team t) {
+	public boolean teamReady(Team t, World w) {
 		TransitionOptions to = ops.get(MatchState.PREREQS);
 		if (to == null)
 			return true;
 		for (ArenaPlayer p: t.getPlayers()){
-			if (!to.playerReady(p))
+			if (!to.playerReady(p,w))
 				return false;
 		}
 		return true;
@@ -115,7 +135,7 @@ public class MatchTransitions {
 			if (classes != null){
 				sb.append("             classes - ");
 				for (ArenaClass ac : classes.values()){
-					sb.append(" " + ac.getPrettyName());}
+					sb.append(" " + ac.getDisplayName());}
 				sb.append("\n");
 			}
 			List<ItemStack> items = to.getGiveItems();

@@ -13,9 +13,9 @@ import mc.alk.arena.objects.MatchParams;
 import mc.alk.arena.objects.Rating;
 import mc.alk.arena.objects.arenas.Arena;
 import mc.alk.arena.objects.exceptions.InvalidOptionException;
-import mc.alk.arena.util.Util.MinMax;
+import mc.alk.arena.util.MinMax;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.StringUtils;
 
 public class EventOpenOptions {
 	public static enum EventOpenOption{
@@ -108,7 +108,7 @@ public class EventOpenOptions {
 				eoo.announceInterval = (Integer) obj;
 				break;
 			case ARENA:
-				obj = BattleArena.getBAC().getArena(val);
+				obj = BattleArena.getBAController().getArena(val);
 				if (obj==null){
 					throw new InvalidOptionException("&cCouldnt find the arena &6" +val);}
 			default:
@@ -134,7 +134,8 @@ public class EventOpenOptions {
 
 	public void updateParams(MatchParams mp){
 		/// Rated
-		mp.setRating(hasOption(EventOpenOption.UNRATED) ? Rating.UNRATED : Rating.RATED);
+		if (hasOption(EventOpenOption.UNRATED))
+			mp.setRating(Rating.UNRATED);
 		/// By default lets make the teamSize the min team size if max # teams not specified as a finite range
 		if (mp.getMaxTeams() == ArenaParams.MAX){
 			mp.setMaxTeamSize(mp.getMinTeamSize());
@@ -151,7 +152,7 @@ public class EventOpenOptions {
 	}
 
 	public Arena getArena(MatchParams mp, JoinOptions jp) throws InvalidOptionException{
-		BattleArenaController ac = BattleArena.getBAC();
+		BattleArenaController ac = BattleArena.getBAController();
 
 		Arena arena;
 		boolean autoFindArena = false;

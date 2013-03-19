@@ -24,6 +24,9 @@ public class BlankCompetition extends Competition{
 	public CompetitionState getState() {return null;}
 
 	@Override
+	public String getName() {return id+"";}
+
+	@Override
 	protected void transitionTo(CompetitionState state) {}
 
 	@Override
@@ -33,9 +36,24 @@ public class BlankCompetition extends Competition{
 	public void addTeam(Team team) {this.teams.add(team);}
 
 	@Override
+	public boolean removeTeam(Team team) {return this.teams.remove(team);}
+
+	@Override
 	public void addedToTeam(Team team, Collection<ArenaPlayer> players) {/* do nothing */}
 
 	@Override
 	public void addedToTeam(Team team, ArenaPlayer player) {/* do nothing */}
+
+	@Override
+	public void removedFromTeam(Team team, Collection<ArenaPlayer> players) {/* do nothing */}
+
+	@Override
+	public void removedFromTeam(Team team, ArenaPlayer player) {/* do nothing */}
+
+	@Override
+	public boolean canLeave(ArenaPlayer p) {return true;}
+
+	@Override
+	public boolean leave(ArenaPlayer p) {return true;}
 
 }

@@ -4,6 +4,7 @@ import java.text.SimpleDateFormat;
 
 import mc.alk.arena.BattleArena;
 import mc.alk.arena.Defaults;
+import mc.alk.arena.controllers.messaging.MessageHandler;
 
 import org.bukkit.Bukkit;
 
@@ -54,18 +55,22 @@ public class TimeUtil {
 		StringBuilder sb = new StringBuilder();
 		if (d > 0) {
 			has=true;
-			sb.append("&6"+d + "&e " + dayOrDays(d) +" ");}
+			sb.append(MessageHandler.getSystemMessage("time_format", d, dayOrDays(d)));
+		}
 		if (h > 0) {
+			sb.append((has?" ":"") + MessageHandler.getSystemMessage("time_format", h, hourOrHours(h)));
 			has =true;
-			sb.append("&6"+h + "&e " + hourOrHours(h)+" ");}
+		}
 		if (m > 0) {
+			sb.append((has?" ":"") + MessageHandler.getSystemMessage("time_format", m, minOrMins(m)));
 			has=true;
-			sb.append("&6"+m + "&e " + minOrMins(m)+" ");}
+		}
 		if (s > 0) {
+			sb.append((has?" ":"") + MessageHandler.getSystemMessage("time_format", s, secOrSecs(s)));
 			has = true;
-			sb.append("&6"+s + "&e " + secOrSecs(s));}
+		}
 		if (!has){
-			sb.append("&60 matchEndTime");
+			sb.append((has?" ":"") + MessageHandler.getSystemMessage("zero_time"));
 		}
 		return sb.toString();
 	}

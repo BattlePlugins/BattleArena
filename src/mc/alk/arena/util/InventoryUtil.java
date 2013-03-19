@@ -1,5 +1,6 @@
 package mc.alk.arena.util;
 
+import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -11,26 +12,45 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 import mc.alk.arena.Defaults;
-import net.minecraft.server.EntityHuman;
-import net.minecraft.server.EntityPlayer;
+import mc.alk.arena.util.compat.IInventoryHelper;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+//import org.bukkit.inventory.meta.LeatherArmorMeta;
 
 public class InventoryUtil {
-	static final String version = "BA InventoryUtil 2.1.5";
+	static final String version = "BA InventoryUtil 2.1.6";
 	static final boolean DEBUG = false;
+	static IInventoryHelper handler = null;
+
+	static {
+		try {
+			final String pkg = Bukkit.getServer().getClass().getPackage().getName();
+			String version = pkg.substring(pkg.lastIndexOf('.') + 1);
+			final Class<?> clazz;
+			if (version.equalsIgnoreCase("craftbukkit")){
+				clazz = Class.forName("mc.alk.arena.util.compat.pre.InventoryHelper");
+			} else{
+				clazz = Class.forName("mc.alk.arena.util.compat.post.InventoryHelper");
+			}
+			Class<?>[] args = {};
+			handler = (IInventoryHelper) clazz.getConstructor(args).newInstance((Object[])args);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
 
 	public static class Armor{
 		final public ArmorLevel level;
 		final public ArmorType type;
 		Armor(ArmorType at, ArmorLevel al){this.level = al; this.type = at;}
 	}
+
 	public static class EnchantmentWithLevel{
 		public EnchantmentWithLevel(){}
 		public EnchantmentWithLevel(boolean all){this.all = all;}
@@ -48,6 +68,10 @@ public class InventoryUtil {
 		public PInv(PlayerInventory inventory) {
 			contents = inventory.getContents();
 			setArmor(inventory);
+		}
+		public PInv(List<ItemStack> items){
+			contents = items.toArray(new ItemStack[items.size()]);
+			armor = new ItemStack[0];
 		}
 		public void setArmor(PlayerInventory inventory){
 			this.armor=new ItemStack[4];
@@ -305,27 +329,37 @@ public class InventoryUtil {
 	}
 
 	public static void addItemToInventory(Player player, ItemStack itemStack) {
-		addItemToInventory(player,itemStack,itemStack.getAmount(),true,false);
+		addItemToInventory(player,itemStack,itemStack.getAmount(),true,false,null);
 	}
 
 	public static void addItemToInventory(Player player, ItemStack itemStack, int stockAmount, boolean update) {
-		addItemToInventory(player,itemStack,stockAmount,update,false);
+		addItemToInventory(player,itemStack,stockAmount,update,false,null);
+	}
+
+	public static void addItemsToInventory(Player p, List<ItemStack> items, boolean ignoreCustomHelmet) {
+		addItemsToInventory(p,items, ignoreCustomHelmet,null);
 	}
 
 	@SuppressWarnings("deprecation")
-	public static void addItemsToInventory(Player p, List<ItemStack> items, final boolean ignoreCustomHelmet) {
+	public static void addItemsToInventory(Player p, List<ItemStack> items, boolean ignoreCustomHelmet, Color color) {
 		for (ItemStack is : items){
-			InventoryUtil.addItemToInventory(p, is.clone(), is.getAmount(), false, ignoreCustomHelmet);
+			InventoryUtil.addItemToInventory(p, is.clone(), is.getAmount(), false, ignoreCustomHelmet, color);
 		}
 		try { p.updateInventory(); } catch (Exception e){}
 	}
 
+	public static void addItemToInventory(Player player, ItemStack itemStack, int stockAmount,
+			boolean update, boolean ignoreCustomHelmet) {
+		addItemToInventory(player,itemStack,stockAmount,update,ignoreCustomHelmet,null);
+	}
+
 	@SuppressWarnings("deprecation")
-	public static void addItemToInventory(Player player, ItemStack itemStack, int stockAmount, boolean update, boolean ignoreCustomHelmet) {
+	public static void addItemToInventory(Player player, ItemStack itemStack, int stockAmount,
+			boolean update, boolean ignoreCustomHelmet, Color color) {
 		PlayerInventory inv = player.getInventory();
 		Material itemType =itemStack.getType();
 		if (armor.containsKey(itemType)){
-			addArmorToInventory(inv,itemStack,stockAmount,ignoreCustomHelmet);
+			addArmorToInventory(inv,itemStack,stockAmount,ignoreCustomHelmet, color);
 		} else {
 			addItemToInventory(inv, itemStack,stockAmount);
 		}
@@ -335,15 +369,20 @@ public class InventoryUtil {
 
 
 	private static void addArmorToInventory(PlayerInventory inv,
-			ItemStack itemStack, int stockAmount, boolean ignoreCustomHelmet) {
+			ItemStack itemStack, int stockAmount, boolean ignoreCustomHelmet, Color color) {
 		Material itemType =itemStack.getType();
 		final boolean isHelmet = armor.get(itemType).type == ArmorType.HELM;
 		/// no item: add to armor slot
 		/// item better: add old to inventory, new to armor slot
 		/// item notbetter: add to inventory
-		final ItemStack oldArmor = getArmorSlot(inv,armor.get(itemType).type);
+		Armor a = armor.get(itemType);
+		final ItemStack oldArmor = getArmorSlot(inv,a.type);
 		boolean empty = (oldArmor == null || oldArmor.getType() == Material.AIR);
-		boolean better = empty ? true : armorSlotBetter(armor.get(oldArmor.getType()),armor.get(itemType));
+		boolean better = empty ? true : armorSlotBetter(armor.get(oldArmor.getType()),a);
+
+		if (color != null && a.level == ArmorLevel.LEATHER){
+			handler.setItemColor(itemStack,color);
+		}
 		if (empty || better){
 			switch (armor.get(itemType).type){
 			case HELM:
@@ -483,7 +522,7 @@ public class InventoryUtil {
 	public static void addItemToInventory(Inventory inv, ItemStack is, int left){
 		if (is == null || is.getType() == Material.AIR)
 			return;
-		if (Defaults.IGNORE_STACKSIZE){
+		if (Defaults.ITEMS_IGNORE_STACKSIZE){
 			inv.addItem(is);
 			return;
 		}
@@ -517,16 +556,13 @@ public class InventoryUtil {
 
 	public static void closeInventory(Player p) {
 		try{
-			EntityHuman eh = ((CraftPlayer)p).getHandle();
-			if ((eh instanceof EntityPlayer)){
-				EntityPlayer ep = (EntityPlayer) eh;
-				ep.closeInventory();
-			}
+			p.closeInventory();
 		}catch(Exception closeInventoryError){
 			/// This almost always throws an NPE, but does its job so ignore
 		}
 	}
 
+	@SuppressWarnings("deprecation")
 	public static void clearInventory(Player p) {
 		if(Defaults.DEBUG_STORAGE) Log.info("Clearing inventory of " + p.getName());
 		try{
@@ -537,10 +573,13 @@ public class InventoryUtil {
 				inv.setArmorContents(null);
 				inv.setItemInHand(null);
 			}
+			p.updateInventory();
 		} catch(Exception ee){
 			ee.printStackTrace();
 		}
 	}
+
+	@SuppressWarnings("deprecation")
 	public static void clearInventory(Player p, boolean skipHead) {
 		if (!skipHead){
 			clearInventory(p);
@@ -557,6 +596,7 @@ public class InventoryUtil {
 				inv.setLeggings(null);
 				inv.setItemInHand(null);
 			}
+			p.updateInventory();
 		} catch(Exception ee){
 			ee.printStackTrace();
 		}
@@ -595,7 +635,7 @@ public class InventoryUtil {
 			for (int i = 1; i < split.length-1;i++){
 				EnchantmentWithLevel ewl = getEnchantment(split[i].trim());
 				try {
-					is.addEnchantment(ewl.e, ewl.lvl);
+					is.addUnsafeEnchantment(ewl.e, ewl.lvl);
 				} catch (IllegalArgumentException iae){
 					Logger.getLogger("minecraft").warning(ewl+" can not be applied to the item " + str);
 				}
@@ -633,7 +673,8 @@ public class InventoryUtil {
 		EnchantmentWithLevel ewl = new EnchantmentWithLevel();
 		ewl.e = e;
 		if (lvl < e.getStartLevel()){lvl = e.getStartLevel();}
-		if (lvl > e.getMaxLevel()){lvl = e.getMaxLevel();}
+		if (!Defaults.ITEMS_UNSAFE_ENCHANTMENTS &&
+				lvl > e.getMaxLevel()){lvl = e.getMaxLevel();}
 		ewl.lvl = lvl;
 		return ewl;
 	}
@@ -654,9 +695,7 @@ public class InventoryUtil {
 
 	public void addEnchantments(ItemStack is,Map<Enchantment, Integer> enchantments) {
 		for (Enchantment e: enchantments.keySet()){
-			if (e.canEnchantItem(is)){
-				is.addUnsafeEnchantment(e, enchantments.get(e));
-			}
+			is.addUnsafeEnchantment(e, enchantments.get(e));
 		}
 	}
 
@@ -683,6 +722,11 @@ public class InventoryUtil {
 		}
 		sb.append(is.getAmount());
 		return sb.toString();
+	}
+
+	public static boolean isColorable(ItemStack item){
+		Armor a = armor.get(item.getType());
+		return a != null && a.level == ArmorLevel.LEATHER;
 	}
 
 	public static boolean hasEnchantedItem(Player p) {
@@ -813,6 +857,7 @@ public class InventoryUtil {
 				dura2 += is.getDurability()*is.getAmount();
 			}
 		}
+		//		System.out.println("nitems1  " + nitems1 +":" + nitems2+"      " + dura1 +"  : " + dura2);
 		if (nitems1 != nitems2 || dura1 != dura2)
 			return false;
 

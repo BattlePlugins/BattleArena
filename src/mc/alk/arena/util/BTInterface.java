@@ -29,7 +29,7 @@ public class BTInterface {
 	static private HashMap<String, TrackerInterface> btis = new HashMap<String, TrackerInterface>();
 	static private HashMap<String, TrackerInterface> currentInterfaces = new HashMap<String, TrackerInterface>();
 	final TrackerInterface ti;
-	boolean valid;
+	boolean valid = false;
 	public BTInterface(MatchParams mp){
 		ti = getInterface(mp);
 		valid = battleTracker != null && ti != null;
@@ -50,6 +50,15 @@ public class BTInterface {
 		return db == null ? null : btis.get(db);
 	}
 
+	public static void addRecord(TrackerInterface bti, Set<Team> victors,Set<Team> losers, Set<Team> drawers, WLT win) {
+		if (victors != null){
+			Set<ArenaPlayer> winningPlayers = new HashSet<ArenaPlayer>();
+			for (Team w : victors){
+				winningPlayers.addAll(w.getPlayers());
+			}
+			addRecord(bti,winningPlayers, losers,win);
+		}
+	}
 	public static void addRecord(TrackerInterface bti, Set<ArenaPlayer> players, Collection<Team> losers, WLT win) {
 		if (bti == null)
 			return;
@@ -77,7 +86,10 @@ public class BTInterface {
 	}
 
 	public static boolean addBTI(MatchParams pi) {
+		if (battleTracker == null)
+			return false;
 		final String dbName = pi.getDBName();
+		if (Defaults.DEBUG) System.out.println("adding BTI for " + pi +"  " + dbName);
 		TrackerInterface bti = btis.get(dbName);
 		if (bti == null){
 			/// Try to first the interface from our existing ones
@@ -94,7 +106,6 @@ public class BTInterface {
 				if (aBTI == null)
 					aBTI = bti;
 			}
-			if (Defaults.DEBUG) System.out.println("adding BTI for " + pi +"  " + dbName);
 			btis.put(dbName, bti);
 		}
 		return true;
@@ -119,6 +130,8 @@ public class BTInterface {
 	public static boolean hasInterface(MatchParams pi) {
 		return btis.containsKey(pi.getName());
 	}
+
+	@SuppressWarnings("deprecation")
 	public Integer getElo(Team t) {
 		if (!isValid())
 			return new Integer((int) Defaults.DEFAULT_ELO);
@@ -133,6 +146,8 @@ public class BTInterface {
 		if (!isValid()) return null;
 		try{return ti.loadRecord(player);} catch(Exception e){e.printStackTrace();return null;}
 	}
+
+	@SuppressWarnings("deprecation")
 	public String getRankMessage(OfflinePlayer player) {
 		Stat stat = loadRecord(player);
 		if (stat == null){
@@ -142,7 +157,6 @@ public class BTInterface {
 			rank = -1;
 		return "&eRank:&6"+rank+"&e (&4"+stat.getWins()+"&e:&8"+stat.getLosses()+"&e)&6["+stat.getRanking()+"]&e" +
 				". Highest &6["+ stat.getMaxRanking()+"]&e Longest Streak &b"+stat.getMaxStreak();
-//		return "";
 	}
 	public boolean setRanking(OfflinePlayer player, Integer elo) {
 		return ti.setRanking(player, elo);
@@ -153,4 +167,5 @@ public class BTInterface {
 	public void printTopX(CommandSender sender, int x, int minTeamSize, String headerMsg, String bodyMsg) {
 		ti.printTopX(sender, StatType.RANKING, x, minTeamSize,headerMsg,bodyMsg);
 	}
+
 }

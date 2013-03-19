@@ -1,7 +1,13 @@
 package mc.alk.arena.objects;
 
-import mc.alk.arena.controllers.HeroesInterface;
+import java.util.Stack;
+
+import mc.alk.arena.competition.Competition;
+import mc.alk.arena.controllers.HeroesController;
+import mc.alk.arena.objects.teams.Team;
 import mc.alk.arena.util.PermissionsUtil;
+import mc.alk.arena.util.PlayerUtil;
+import mc.alk.arena.util.Util;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -9,16 +15,39 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.inventory.PlayerInventory;
 
 public class ArenaPlayer {
+
+	/** Player name, needed if Player is not available or null */
+	final String name;
+
+	/** The bukkit player, refreshed with each new event having the player */
 	Player player;
-	ArenaClass preferredClass;
+
+	/**
+	 * Which competitions is the player inside
+	 * This can be up to 2, in cases of a tournament or a reserved arena event
+	 * where they have the event, and the match
+	 */
+	Stack<Competition> competitions = new Stack<Competition>();
+
+	/** Which class did the player pick during the competition */
 	ArenaClass chosenClass;
+
+	/** Has the player specified they are "ready" by clicking a block or sign */
+	boolean isReady;
 
 	public ArenaPlayer(Player player) {
 		this.player = player;
+		this.name = player.getName();
+		reset();
 	}
 
 	public String getName() {
-		return player.getName();
+		return name;
+	}
+
+	public void reset() {
+		this.isReady = false;
+		this.chosenClass = null;
 	}
 
 	@Override
@@ -32,26 +61,35 @@ public class ArenaPlayer {
 
 	@Override
 	public int hashCode() {
-		return getName().hashCode();
+		return name.hashCode();
 	}
 
 	public Player getPlayer() {
 		return player;
 	}
-	public int getHealth() {
-		return player.getHealth();
+
+	public void setPlayer(Player player) {
+		this.player = player;
 	}
 
 	public boolean isOnline() {
 		return player.isOnline();
 	}
 
+	public int getHealth() {
+		return PlayerUtil.getHealth(player);
+	}
+
 	public void setHealth(int health) {
-		player.setHealth(health);
+		PlayerUtil.setHealth(player,health);
+	}
+
+	public int getFoodLevel() {
+		return PlayerUtil.getHunger(player);
 	}
 
 	public void setFoodLevel(int hunger) {
-		player.setFoodLevel(hunger);
+		PlayerUtil.setHunger(player,hunger);
 	}
 
 	public String getDisplayName() {
@@ -78,25 +116,20 @@ public class ArenaPlayer {
 		return player.isDead();
 	}
 
+	public boolean isReady() {
+		return isReady;
+	}
+
+	public void setReady(boolean isReady) {
+		this.isReady = isReady;
+	}
+
 	public PlayerInventory getInventory() {
 		return player.getInventory();
 	}
 
-	public void setPlayer(Player player) {
-		this.player = player;
-	}
-
 	public boolean hasPermission(String perm) {
 		return player.hasPermission(perm);
-	}
-
-
-	public ArenaClass getPreferredClass() {
-		return preferredClass;
-	}
-
-	public void setPreferredClass(ArenaClass preferredClass) {
-		this.preferredClass = preferredClass;
 	}
 
 	public ArenaClass getChosenClass() {
@@ -112,7 +145,31 @@ public class ArenaPlayer {
 	}
 
 	public int getLevel() {
-		return (HeroesInterface.enabled()) ? HeroesInterface.getLevel(player) : player.getLevel();
+		return (HeroesController.enabled()) ? HeroesController.getLevel(player) : player.getLevel();
+	}
+
+	public Competition getCompetition() {
+		return competitions.isEmpty() ? null : competitions.peek();
+	}
+
+	public void addCompetition(Competition competition) {
+		competitions.push(competition);
+		if (competitions.size() > 2){ /// TODO remove once I'm confident about new system
+			Util.printStackTrace();
+		}
+	}
+
+	public boolean removeCompetition(Competition competition) {
+		return competitions.remove(competition);
+	}
+
+	/**
+	 * Returns their current team, based on whichever competition is top of the stack
+	 * This is NOT a self made team, only the team from the competition
+	 * @return Team, or null if they are not inside a competition
+	 */
+	public Team getTeam() {
+		return competitions.isEmpty() ? null : competitions.peek().getTeam(this);
 	}
 
 }

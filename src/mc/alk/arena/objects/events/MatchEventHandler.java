@@ -12,5 +12,7 @@ public @interface MatchEventHandler {
 	MatchState end() default MatchState.NONE;
 	EventPriority priority() default EventPriority.NORMAL;
 	boolean needsPlayer() default true;
+	String entityMethod() default "";
 	boolean suppressCastWarnings() default false;
+	org.bukkit.event.EventPriority bukkitPriority() default org.bukkit.event.EventPriority.HIGHEST;
 }

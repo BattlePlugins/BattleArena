@@ -3,7 +3,7 @@ package mc.alk.arena.objects.messaging;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.StringUtils;
 
 public class MessageOptions {
 	public static enum MessageOption{
@@ -20,6 +20,7 @@ public class MessageOptions {
 		EVENTNAME("{eventname}"), EVENTPREFIX("{eventprefix}"),
 		CMD("{cmd}"),
 		RANKING("{ranking}"),
+		RATING("{rating}"),
 		SECONDS("{seconds}"), TIME("{time}"),
 		PARTICIPANTS("{participants}"),
 		NTEAMS("{nteams}"),
@@ -37,7 +38,7 @@ public class MessageOptions {
 	}
 
 	final Set<MessageOption> options = new HashSet<MessageOption>();
-	
+
 	public MessageOptions(String msg) {
 		for (MessageOption mop: MessageOption.values()){
 			if (StringUtils.indexOf(msg, mop.getReplaceString()) != -1){

@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import mc.alk.arena.controllers.MethodController;
 import mc.alk.arena.objects.ArenaParams;
 import mc.alk.arena.util.CaseInsensitiveMap;
 
@@ -17,8 +16,6 @@ public class ArenaType implements Comparable<ArenaType>{
 	static public CaseInsensitiveMap<Class<? extends Arena>> classes = new CaseInsensitiveMap<Class<? extends Arena>>();
 	static public CaseInsensitiveMap<ArenaType> types = new CaseInsensitiveMap<ArenaType>();
 
-	public static ArenaType ANY = null;
-	public static ArenaType VERSUS = null;
 	static int count = 0;
 
 	final String name;
@@ -31,9 +28,6 @@ public class ArenaType implements Comparable<ArenaType>{
 		this.ownerPlugin = plugin;
 		if (!types.containsKey(name))
 			types.put(name,this);
-
-		if (name.equalsIgnoreCase("ANY")) ANY = this;
-		else if (name.equalsIgnoreCase("VERSUS")) { VERSUS = this;}
 	}
 	@Override
 	public String toString(){
@@ -41,18 +35,18 @@ public class ArenaType implements Comparable<ArenaType>{
 	}
 
 	public boolean matches(ArenaType arenaType) {
-		if (this == ANY || arenaType == ANY || this == arenaType) return true;
+		if (this == arenaType) return true;
 		return (compatibleTypes==null) ? false : compatibleTypes.contains(arenaType);
 	}
 
 	public Collection<String> getInvalidMatchReasons(ArenaType arenaType) {
 		List<String> reasons = new ArrayList<String>();
-		if (this != arenaType && this!=ANY && arenaType != ANY) reasons.add("Arena type is " + this +". You requested " + arenaType);
+		if (this != arenaType) reasons.add("Arena type is " + this +". You requested " + arenaType);
 		return reasons;
 	}
 
 	public String toPrettyString(int min, int max) {
-		if (this == ArenaType.VERSUS){
+		if (this.name.equals("ARENA") || this.name.equals("SKIRMISH")){
 			return min +"v" + max;
 		} else {
 			return toString();
@@ -125,14 +119,14 @@ public class ArenaType implements Comparable<ArenaType>{
 		return sb.toString();
 	}
 
-	public static ArenaType register(String arenaType, Class<? extends Arena> c, Plugin plugin) {
+	public static ArenaType register(String arenaType, Class<? extends Arena> arenaClass, Plugin plugin) {
 		final String uarenaType = arenaType.toUpperCase();
 		if (!classes.containsKey(uarenaType))
-			classes.put(uarenaType, c);
+			classes.put(uarenaType, arenaClass);
 		if (!types.containsKey(uarenaType)){
 			new ArenaType(arenaType,plugin);
 		}
-		MethodController.addMethods(c,c.getMethods());
+//		MethodController.addBukkitMethods(c,c.getMethods());
 		return types.get(uarenaType);
 	}
 
@@ -145,22 +139,36 @@ public class ArenaType implements Comparable<ArenaType>{
 	 */
 	public static Arena createArena(String arenaName, ArenaParams arenaParams) {
 		ArenaType arenaType = arenaParams.getType();
-		Arena newArena = createArena(arenaType);
-		if (newArena == null)
-			return null;
-		newArena.setName(arenaName);
-		newArena.setParameters(arenaParams);
-		return newArena;
+		return createArena(arenaType, arenaName, arenaParams, true);
 	}
 
-	private static Arena createArena(ArenaType arenaType){
+	/**
+	 * Create an arena from a name and parameters
+	 * This will not load persistable objects, which must be done by the caller
+	 * @param arenaName
+	 * @param arenaParams
+	 * @param init : whether we should call init directly after arena creation
+	 * @return
+	 */
+	public static Arena createArena(String arenaName, ArenaParams arenaParams, boolean init) {
+		ArenaType arenaType = arenaParams.getType();
+		return createArena(arenaType, arenaName, arenaParams, true);
+	}
+
+	private static Arena createArena(ArenaType arenaType, String arenaName, ArenaParams arenaParams, boolean init){
 		Class<?> arenaClass = classes.get(arenaType.name);
 		if (arenaClass == null)
 			return null;
+
 		Class<?>[] args = {};
 		try {
 			Constructor<?> constructor = arenaClass.getConstructor(args);
-			return (Arena) constructor.newInstance((Object[])args);
+			Arena arena = (Arena) constructor.newInstance((Object[])args);
+			arena.setName(arenaName);
+			arena.setParameters(arenaParams);
+			if (init)
+				arena.privateInit();
+			return arena;
 		} catch (NoSuchMethodException e){
 			System.err.println("If you have custom constructors for your class you must also have a public default constructor");
 			System.err.println("Add the following line to your Arena Class '" + arenaClass.getSimpleName()+".java'");
@@ -180,6 +188,18 @@ public class ArenaType implements Comparable<ArenaType>{
 		at2.addCompatibleType(at1);
 	}
 
+	public static void addAliasForType(String type, String alias) {
+		type = type.toUpperCase();
+		alias = alias.toUpperCase();
+		if (type.equals(alias))
+			return;
+		ArenaType at = fromString(type);
+		if (at == null)
+			return;
+		types.put(alias, at);
+		classes.put(alias, getArenaClass(at));
+	}
+
 
 	public static Collection<ArenaType> getTypes() {
 		return types.values();
@@ -196,6 +216,14 @@ public class ArenaType implements Comparable<ArenaType>{
 	}
 
 	public static Class<? extends Arena> getArenaClass(ArenaType arenaType){
-		return classes.get(arenaType.getName());
+		return getArenaClass(arenaType.getName());
+	}
+
+	public static Class<? extends Arena> getArenaClass(String arenaType){
+		return classes.get(arenaType);
+	}
+
+	public static boolean contains(String arenaType) {
+		return types.containsKey(arenaType);
 	}
 }

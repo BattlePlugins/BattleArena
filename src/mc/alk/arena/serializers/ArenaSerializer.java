@@ -2,6 +2,7 @@ package mc.alk.arena.serializers;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -12,18 +13,17 @@ import java.util.Set;
 import mc.alk.arena.BattleArena;
 import mc.alk.arena.controllers.BattleArenaController;
 import mc.alk.arena.controllers.ParamController;
-import mc.alk.arena.controllers.WorldGuardInterface;
-import mc.alk.arena.controllers.WorldGuardInterface.WorldGuardFlag;
+import mc.alk.arena.controllers.WorldGuardController;
+import mc.alk.arena.controllers.WorldGuardController.WorldGuardFlag;
 import mc.alk.arena.objects.ArenaParams;
 import mc.alk.arena.objects.MatchParams;
-import mc.alk.arena.objects.MatchState;
 import mc.alk.arena.objects.MatchTransitions;
 import mc.alk.arena.objects.arenas.Arena;
+import mc.alk.arena.objects.arenas.ArenaControllerInterface;
 import mc.alk.arena.objects.arenas.ArenaType;
 import mc.alk.arena.objects.arenas.Persistable;
-import mc.alk.arena.objects.exceptions.InvalidArgumentException;
-import mc.alk.arena.objects.options.TransitionOptions;
-import mc.alk.arena.objects.options.TransitionOptions.TransitionOption;
+import mc.alk.arena.objects.exceptions.RegionNotFound;
+import mc.alk.arena.objects.options.TransitionOption;
 import mc.alk.arena.objects.spawns.EntitySpawn;
 import mc.alk.arena.objects.spawns.ItemSpawn;
 import mc.alk.arena.objects.spawns.SpawnGroup;
@@ -32,8 +32,8 @@ import mc.alk.arena.objects.spawns.SpawnTime;
 import mc.alk.arena.objects.spawns.TimedSpawn;
 import mc.alk.arena.util.InventoryUtil;
 import mc.alk.arena.util.Log;
+import mc.alk.arena.util.MinMax;
 import mc.alk.arena.util.SerializerUtil;
-import mc.alk.arena.util.Util.MinMax;
 
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.Location;
@@ -54,9 +54,9 @@ public class ArenaSerializer {
 		arenaController = bac;
 	}
 
-	public ArenaSerializer(Plugin plugin, String path){
+	public ArenaSerializer(Plugin plugin, File file){
 		this.plugin = plugin;
-		this.f = new File(path);
+		this.f = file;
 		if (!f.exists()){
 			try {
 				f.createNewFile();
@@ -106,49 +106,98 @@ public class ArenaSerializer {
 	public void loadArenas(Plugin plugin){
 		try {config.load(f);} catch (Exception e){e.printStackTrace();}
 		Log.info("["+plugin.getName()+ "] Loading arenas from " + f.getPath()+" using config "+ config.getName());
-		loadArenas(plugin, BattleArena.getBAC(), config,null);
+		loadArenas(plugin, BattleArena.getBAController(), config,null);
 	}
 
 	public void loadArenas(Plugin plugin, ArenaType arenaType){
 		try {config.load(f);} catch (Exception e){e.printStackTrace();}
-		Log.info("["+plugin.getName()+ "] Loading arenas from " + f.getPath() +" using config "+ config.getName());
-		loadArenas(plugin, BattleArena.getBAC(), config, arenaType);
+		Log.info("["+plugin.getName()+ "] Loading arenas from " + f.getPath() +" using config "+ config.getName() +" at=" + arenaType);
+		loadArenas(plugin, BattleArena.getBAController(), config, arenaType);
 	}
 
-	protected static void loadArenas(Plugin plugin, BattleArenaController bac, ConfigurationSection cs, ArenaType arenaType){
+	protected void loadArenas(Plugin plugin, BattleArenaController bac, //ArenaSerializer arenaSerializer,
+			ConfigurationSection cs, ArenaType arenaType){
 		final String pname = "["+plugin.getName()+"] ";
 		if (cs == null){
 			Log.info(pname+" has no arenas, cs is null");
 			return;
 		}
+
 		ConfigurationSection as = cs.getConfigurationSection("arenas");
-		if (as == null){
+		ConfigurationSection bks = cs.getConfigurationSection("brokenArenas");
+		if (as == null && bks == null){
 			Log.info(pname+"has no arenas, cs section =" + cs.getCurrentPath());
 			return;
 		}
-		Set<String> keys = as.getKeys(false);
-		StringBuilder loadedArenas = new StringBuilder(pname+"Successfully loaded arenas");
-		StringBuilder failedArenas = new StringBuilder(pname+"Failed loading arenas");
-		boolean hasFailed = false, hasAny = false;
+		List<String> keys = new ArrayList<String>(as.getKeys(false));
+		int oldGoodSize = keys.size();
+		Set<String> brokenKeys = bks == null ? new HashSet<String>() : bks.getKeys(false);
+		int oldBrokenSize = brokenKeys.size();
+		keys.addAll(brokenKeys);
+
+		Set<String> brokenArenas = new HashSet<String>();
+		Set<String> loadedArenas = new HashSet<String>();
 		for (String name : keys){
+			if (loadedArenas.contains(name) || brokenArenas.contains(name)) /// We already tried to load this arena
+				continue;
+			boolean broken = brokenKeys.contains(name);
+			String section = broken ? "brokenArenas" : "arenas";
 			if (arenaType != null){ /// Are we looking for 1 particular arena type to load
-				if (!cs.getString("arenas."+name+".type","").equalsIgnoreCase(arenaType.getName())){
-					continue;}
+				String path = section+"."+name;
+				if (!cs.getString(path+".type","").equalsIgnoreCase(arenaType.getName())){
+					if (brokenArenas.remove(name)){
+						oldBrokenSize--;
+					} else{
+						oldGoodSize--;
+					}
+					continue;
+				}
 			}
-			if (loadArena(bac,cs.getConfigurationSection("arenas."+name))){
-				hasAny = true;
-				loadedArenas.append(","+name);
-			} else{
-				hasFailed = true;
-				failedArenas.append(","+name);
+			boolean success = false;
+			try{
+				success = loadArena(bac,cs.getConfigurationSection(section+"."+name));
+				if (success){
+					loadedArenas.add(name);
+					if (broken){
+						transfer(cs,"brokenArenas."+name, "arenas."+name);}
+				}
+			} catch(IllegalArgumentException e){
+				Log.err(e.getMessage());
+			} catch(Exception e){
+				e.printStackTrace();
+			}
+			if (!success){
+				brokenArenas.add(name);
+				if (!broken){
+					transfer(cs,"arenas."+name, "brokenArenas."+name);}
 			}
 		}
-		if (hasAny)
-			Log.info(loadedArenas.toString());
-		else
+
+		if (!loadedArenas.isEmpty()) {
+			Log.info("Successfully loaded arenas: " + StringUtils.join(loadedArenas,", "));
+		} else {
 			Log.info(pname + "No arenas found for " + cs.getCurrentPath() +"  arenatype="+arenaType);
-		if (hasFailed)
-			Log.info(failedArenas.toString());
+		}
+		if (!brokenArenas.isEmpty()){
+			Log.info("Failed loading arenas: " + StringUtils.join(brokenArenas, ", "));
+		}
+		if (oldGoodSize != loadedArenas.size() || oldBrokenSize != brokenArenas.size()){
+			try {
+				config.save(f);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	private static void transfer(ConfigurationSection cs, String string, String string2) {
+		try{
+			Map<String,Object> map = new HashMap<String,Object>(cs.getConfigurationSection(string).getValues(false));
+			cs.createSection(string2, map);
+			cs.set(string,null);
+		} catch(Exception e){
+			e.printStackTrace();
+		}
 	}
 
 	public static boolean loadArena(BattleArenaController bac, ConfigurationSection cs) {
@@ -157,8 +206,6 @@ public class ArenaSerializer {
 		Integer maxTeams = cs.contains("maxTeams") ? cs.getInt("maxTeams") : ArenaParams.MAX;
 		Integer minTeamSize = cs.contains("minTeamSize") ? cs.getInt("minTeamSize") : 1;
 		Integer maxTeamSize = cs.contains("maxTeamSize") ? cs.getInt("maxTeamSize") : ArenaParams.MAX;
-		Integer pminTeamSize = cs.contains("preferredMinTeamSize") ? cs.getInt("preferredMinTeamSize") : minTeamSize;
-		Integer pmaxTeamSize = cs.contains("preferredMaxTeamSize") ? cs.getInt("preferredMaxTeamSize") : maxTeamSize;
 		if (cs.contains("teamSize")) {
 			MinMax mm = MinMax.valueOf(cs.getString("teamSize"));
 			minTeamSize = mm.min;
@@ -168,11 +215,6 @@ public class ArenaSerializer {
 			MinMax mm = MinMax.valueOf(cs.getString("nTeams"));
 			minTeams = mm.min;
 			maxTeams = mm.max;
-		}
-		if (cs.contains("preferredTeamSize")) {
-			MinMax mm = MinMax.valueOf(cs.getString("preferredTeamSize"));
-			pminTeamSize = mm.min;
-			pmaxTeamSize = mm.max;
 		}
 
 		if (minTeams == 0 || maxTeams == 0){
@@ -185,20 +227,18 @@ public class ArenaSerializer {
 			Log.err(" Arena type not found for " + name);
 			return false;
 		}
-		ArenaParams q = new ArenaParams(minTeamSize,maxTeamSize,atype);
+		ArenaParams q = new ArenaParams(atype);
 		q.setMinTeams(minTeams);
 		q.setMaxTeams(maxTeams);
 		q.setMinTeamSize(minTeamSize);
 		q.setMaxTeamSize(maxTeamSize);
-		q.setPreferredMinTeamSize(pminTeamSize);
-		q.setPreferredMaxTeamSize(pmaxTeamSize);
 
 		if (!q.valid()){
 			Log.err( name + " This arena is not valid arenaq=" + q.toString());
 			return false;
 		}
 
-		Arena arena = ArenaType.createArena(name, q);
+		Arena arena = ArenaType.createArena(name, q,false);
 		if (arena == null){
 			Log.err("Couldnt load the Arena " + name);
 			return false;
@@ -227,7 +267,7 @@ public class ArenaSerializer {
 				TimedSpawn s;
 				try {
 					s = parseSpawnable(scs);
-				} catch (InvalidArgumentException e) {
+				} catch (IllegalArgumentException e) {
 					e.printStackTrace();
 					continue;
 				}
@@ -237,35 +277,39 @@ public class ArenaSerializer {
 			}
 		}
 		cs = cs.getConfigurationSection("persistable");
-		Persistable.yamlToObjects(arena, cs);
-		arena.init();
+		Persistable.yamlToObjects(arena, cs,Arena.class);
 		arena.setParameters(q);
 		updateRegions(arena);
+		ArenaControllerInterface aci = new ArenaControllerInterface(arena);
+		aci.init();
 		bac.addArena(arena);
 		return true;
 	}
 
 	private static void updateRegions(Arena arena) {
-		if (!WorldGuardInterface.hasWorldGuard())
+		if (!WorldGuardController.hasWorldGuard())
 			return;
-		String region = arena.getRegion();
-		String worldName = arena.getRegionWorld();
-		if (region == null || worldName == null)
+		if (!arena.hasRegion())
 			return;
+		if (!WorldGuardController.hasRegion(arena.getWorldGuardRegion())){
+			Log.err("Arena " + arena.getName() +" has a world guard region defined but it no longer exists inside of WorldGuard."+
+					"You will have to remake the region.  /arena alter <arena name> addregion");}
 		MatchParams mp = ParamController.getMatchParamCopy(arena.getArenaType().getName());
 		if (mp == null)
 			return;
 		MatchTransitions trans = mp.getTransitionOptions();
 		if (trans == null)
 			return;
-		TransitionOptions tops = trans.getOptions(MatchState.DEFAULTS);
-		if (tops == null)
-			return;
-		WorldGuardInterface.setFlag(region,worldName, WorldGuardFlag.ENTRY, !tops.hasOption(TransitionOption.WGNOENTER));
+		WorldGuardController.setFlag(arena.getWorldGuardRegion(), WorldGuardFlag.ENTRY, !trans.hasAnyOption(TransitionOption.WGNOENTER));
+		try {
+			WorldGuardController.trackRegion(arena.getWorldGuardRegion());
+		} catch (RegionNotFound e) {
+			e.printStackTrace();
+		}
 	}
 
 	private void saveArenas(boolean log) {
-		ArenaSerializer.saveArenas(BattleArena.getBAC().getArenas().values(), f, config, plugin,log);
+		ArenaSerializer.saveArenas(BattleArena.getBAController().getArenas().values(), f, config, plugin,log);
 		try {
 			config.save(f);
 		} catch (IOException e) {
@@ -274,59 +318,68 @@ public class ArenaSerializer {
 	}
 
 	private static void saveArenas(Collection<Arena> arenas, File f, ConfigurationSection config, Plugin plugin, boolean log){
-		ConfigurationSection maincs = config.createSection("arenas");
 		HashMap<String, Object> map = new HashMap<String, Object>();
 		for (Arena arena : arenas){
-			ArenaType at = arena.getArenaType();
-			if (at.getPlugin().getName() != plugin.getName())
-				continue;
-			String arenaname = arena.getName();
+			String arenaname = null;
+			try{
+				arenaname = arena.getName();
+				ArenaType at = arena.getArenaType();
+				if (at.getPlugin().getName() != plugin.getName())
+					continue;
 
-			HashMap<String, Object> amap = new HashMap<String, Object>();
-			amap.put("type", arena.getArenaType().getName());
-			amap.put("teamSize", arena.getParameters().getTeamSizeRange());
-			amap.put("nTeams", arena.getParameters().getNTeamRange());
+				HashMap<String, Object> amap = new HashMap<String, Object>();
+				amap.put("type", arena.getArenaType().getName());
+				amap.put("teamSize", arena.getParameters().getTeamSizeRange());
+				amap.put("nTeams", arena.getParameters().getNTeamRange());
 
-			/// Spawn locations
-			Map<Integer, Location> mlocs = arena.getSpawnLocs();
-			if (mlocs != null){
-				HashMap<String,String> locations = SerializerUtil.createSaveableLocations(mlocs);
-				amap.put("locations", locations);
-			}
-
-			/// Wait room spawns
-			mlocs = arena.getWaitRoomSpawnLocs();
-			if (mlocs!= null){
-				HashMap<String,String> locations = SerializerUtil.createSaveableLocations(mlocs);
-				amap.put("waitRoomLocations", locations);
-			}
-
-			/// Timed spawns
-			Map<Long, TimedSpawn> timedSpawns = arena.getTimedSpawns();
-			if (timedSpawns != null && !timedSpawns.isEmpty()){
-				HashMap<String,Object> spawnmap = new HashMap<String,Object>();
-				for (Long key: timedSpawns.keySet() ){
-					TimedSpawn ts = timedSpawns.get(key);
-					HashMap<String,Object> itemSpawnMap = saveSpawnable(key, ts);
-					spawnmap.put(key.toString(), itemSpawnMap);
+				/// Spawn locations
+				Map<Integer, Location> mlocs = arena.getSpawnLocs();
+				if (mlocs != null){
+					HashMap<String,String> locations = SerializerUtil.createSaveableLocations(mlocs);
+					amap.put("locations", locations);
 				}
-				amap.put("spawns", spawnmap);
+
+				/// Wait room spawns
+				mlocs = arena.getWaitRoomSpawnLocs();
+				if (mlocs!= null){
+					HashMap<String,String> locations = SerializerUtil.createSaveableLocations(mlocs);
+					amap.put("waitRoomLocations", locations);
+				}
+
+				/// Timed spawns
+				Map<Long, TimedSpawn> timedSpawns = arena.getTimedSpawns();
+				if (timedSpawns != null && !timedSpawns.isEmpty()){
+					HashMap<String,Object> spawnmap = new HashMap<String,Object>();
+					for (Long key: timedSpawns.keySet() ){
+						TimedSpawn ts = timedSpawns.get(key);
+						HashMap<String,Object> itemSpawnMap = saveSpawnable(key, ts);
+						spawnmap.put(key.toString(), itemSpawnMap);
+					}
+					amap.put("spawns", spawnmap);
+				}
+
+				Location vloc = arena.getVisitorLoc();
+				if (vloc != null)
+					amap.put("vloc",SerializerUtil.getLocString(vloc));
+
+				Map<String,Object> persisted = Persistable.objectsToYamlMap(arena, Arena.class);
+				if (persisted != null && !persisted.isEmpty()){
+					amap.put("persistable", persisted);
+				}
+
+				map.put(arenaname, amap);
+				config.set("brokenArenas."+arenaname, null); /// take out any duplicate names in broken arenas
+			} catch (Exception e){
+				e.printStackTrace();
+				if (arenaname != null){
+					transfer(config, "arenas."+arenaname, "brokenArenas."+arenaname);
+				}
 			}
-
-			Location vloc = arena.getVisitorLoc();
-			if (vloc != null)
-				amap.put("vloc",SerializerUtil.getLocString(vloc));
-
-			Map<String,Object> persisted = Persistable.objectsToYamlMap(arena);
-			if (persisted != null && !persisted.isEmpty()){
-				amap.put("persistable", persisted);
-			}
-
-			map.put(arenaname, amap);
 		}
 		if (log)
 			Log.info(plugin.getName() + " Saving arenas " + StringUtils.join(map.keySet(),",") +" to " +
 					f.getPath() + " configSection="+config.getCurrentPath()+"." + config.getName());
+		ConfigurationSection maincs = config.createSection("arenas");
 		SerializerUtil.expandMapIntoConfig(maincs, map);
 	}
 
@@ -353,7 +406,7 @@ public class ArenaSerializer {
 		}
 	}
 
-	private static TimedSpawn parseSpawnable(ConfigurationSection cs) throws InvalidArgumentException {
+	private static TimedSpawn parseSpawnable(ConfigurationSection cs) throws IllegalArgumentException {
 		if (!cs.contains("spawn") || !cs.contains("time") || !cs.contains("loc")){
 			Log.err("configuration section cs = " + cs +"  is missing either spawn,time,or loc");
 			return null;
@@ -398,7 +451,7 @@ public class ArenaSerializer {
 		} else if (si instanceof EntitySpawn){
 			EntitySpawn in = (EntitySpawn) si;
 			key = in.getEntityString() + " " + in.getNumber();
-//			value = in.getNumber() +"";
+			//			value = in.getNumber() +"";
 		} else {
 
 		}
@@ -406,11 +459,8 @@ public class ArenaSerializer {
 			spawnmap.put("spawn", key);
 		else
 			spawnmap.put("spawn", key+":" + value);
-		//		for (String k: spawnmap.keySet()){
-		//			System.out.println("k="+k +"  vlaue=" + key+":"+value);
-		//		}
 		spawnmap.put("loc", SerializerUtil.getLocString(si.getLocation()));
-		spawnmap.put("time", ts.getTimeToStart()+" " + ts.getRespawnInterval()+" " + ts.getTimeToDespawn());
+		spawnmap.put("time", ts.getFirstSpawnTime()+" " + ts.getRespawnTime()+" " + ts.getTimeToDespawn());
 		return spawnmap;
 	}
 

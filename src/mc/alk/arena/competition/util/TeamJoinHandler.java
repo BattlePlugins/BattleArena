@@ -2,6 +2,7 @@ package mc.alk.arena.competition.util;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -9,6 +10,7 @@ import mc.alk.arena.competition.Competition;
 import mc.alk.arena.controllers.TeamController;
 import mc.alk.arena.objects.ArenaPlayer;
 import mc.alk.arena.objects.MatchParams;
+import mc.alk.arena.objects.queues.TeamQObject;
 import mc.alk.arena.objects.teams.CompositeTeam;
 import mc.alk.arena.objects.teams.Team;
 import mc.alk.arena.objects.teams.TeamHandler;
@@ -33,25 +35,46 @@ public abstract class TeamJoinHandler implements TeamHandler {
 		public int getRemaining(){return remaining;}
 	}
 
-	List<Team> teams;
-	ArrayList<CompositeTeam> pickupTeams = new ArrayList<CompositeTeam>();
-	MatchParams mp;
+	List<Team> teams = new ArrayList<Team>();
+
+	ArrayList<Team> pickupTeams = new ArrayList<Team>();
 	Competition competition;
 	int minTeamSize,maxTeamSize;
 	int minTeams,maxTeams;
+	Class<? extends Team> clazz;
 
-	public TeamJoinHandler(Competition competition){
+	public TeamJoinHandler(MatchParams params, Competition competition){
+		this(params,competition,CompositeTeam.class);
+	}
+	public TeamJoinHandler(MatchParams params, Competition competition, Class<? extends Team> clazz) {
+		setParams(params);
+		this.clazz = clazz;
 		setCompetition(competition);
 	}
-
-	public void setCompetition(Competition competition){
-		this.competition = competition;
-		this.mp = competition.getParams();
+	public void setCompetition(Competition comp) {
+		this.competition = comp;
+		if (comp != null)
+			this.teams = this.competition.getTeams();
+	}
+	public void setParams(MatchParams mp){
 		this.minTeamSize = mp.getMinTeamSize(); this.maxTeamSize = mp.getMaxTeamSize();
 		this.minTeams = mp.getMinTeams(); this.maxTeams = mp.getMaxTeams();
-		this.teams = competition.getTeams();
 	}
 
+	protected void addToTeam(Team team, Set<ArenaPlayer> players) {
+		team.addPlayers(players);
+		if (competition != null){
+			competition.addedToTeam(team,players);
+		}
+	}
+
+	protected void addTeam(Team team) {
+		if (competition != null){
+			competition.addTeam(team);
+		} else {
+			teams.add(team);
+		}
+	}
 
 	public void deconstruct() {
 		for (Team t: pickupTeams){
@@ -60,11 +83,12 @@ public abstract class TeamJoinHandler implements TeamHandler {
 		pickupTeams.clear();
 	}
 
-	public abstract TeamJoinResult joiningTeam(Team team);
+	public abstract TeamJoinResult joiningTeam(TeamQObject tqo);
 
 	public boolean canLeave(ArenaPlayer p) {
 		return true;
 	}
+
 	public boolean leave(ArenaPlayer p) {
 		for (Team t: pickupTeams){
 			if (t.hasMember(p)){
@@ -72,7 +96,7 @@ public abstract class TeamJoinHandler implements TeamHandler {
 				return true;
 			}
 		}
-		return true;
+		return false;
 	}
 
 	public Set<ArenaPlayer> getExcludedPlayers() {
@@ -82,24 +106,43 @@ public abstract class TeamJoinHandler implements TeamHandler {
 		return tplayers;
 	}
 
+
+	public List<Team> removeImproperTeams(){
+		List<Team> improper = new ArrayList<Team>();
+		Iterator<Team> iter = teams.iterator();
+		while(iter.hasNext()){
+			Team t = iter.next();
+			if (t.size() < minTeamSize || t.size() > maxTeamSize){
+				iter.remove();
+				TeamController.removeTeamHandler(t, this);
+				improper.add(t);
+			}
+		}
+		return improper;
+	}
+
 	public boolean hasEnough(boolean allowDifferentTeamSizes){
+		if (teams ==null)
+			return false;
 		final int teamssize = teams.size();
-		if (teamssize < minTeams || teamssize > maxTeams)
+		if (teamssize < minTeams)
 			return false;
 		int min = Integer.MAX_VALUE;
 		int max = Integer.MIN_VALUE;
+		int valid = 0;
 		for (Team t: teams){
 			final int tsize = t.size();
 			if (tsize < minTeamSize || tsize > maxTeamSize)
-				return false;
+				continue;
 			if (!allowDifferentTeamSizes){
 				min = Math.min(min, tsize);
 				max = Math.max(max, tsize);
 				if (min != tsize || max != tsize)
-					return false;
+					continue;
 			}
+			valid++;
 		}
-		return true;
+		return valid >= minTeams && valid <= maxTeams;
 	}
 
 	public boolean isFull() {
@@ -114,4 +157,18 @@ public abstract class TeamJoinHandler implements TeamHandler {
 		/// we can't add a team.. and all teams are full
 		return true;
 	}
+	public List<Team> getTeams() {
+		return teams;
+	}
+
+	protected Team addToPreviouslyLeftTeam(ArenaPlayer player) {
+		for (Team t: teams){
+			if (t.hasLeft(player)){
+				t.addPlayer(player);
+				return t;
+			}
+		}
+		return null;
+	}
+
 }

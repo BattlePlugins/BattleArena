@@ -9,15 +9,17 @@ package mc.alk.arena.objects;
  */
 public enum MatchState implements CompetitionState{
 	NONE("None"), DEFAULTS("defaults"),
-	PREREQS ("preReqs"), ONOPEN("onOpen"), ONJOIN ("onJoin"),
+	PREREQS ("preReqs"), ONJOIN ("onJoin"), ONOPEN("onOpen"),
 	ONBEGIN("onBegin"), ONPRESTART ("onPrestart"), ONSTART ("onStart"), ONVICTORY ("onVictory"),
 	ONCOMPLETE ("onComplete"), ONCANCEL ("onCancel"), ONFINISH("onFinish"),
 	ONDEATH ("onDeath"), ONSPAWN ("onSpawn"),
 	WINNER ("winner"),LOSERS ("losers"),
 	FIRSTPLACE ("firstPlace"), PARTICIPANTS("participants"),
-	ONENTER("onEnter"), ONLEAVE("onLeave"), ONENTERWAITROOM("onEnterWaitRoom"),
+	ONENTER("onEnter"), ONLEAVE("onLeave"), //ONENTERWAITROOM("onEnterWaitRoom"),
 	ONMATCHINTERVAL("onMatchInterval"), ONMATCHTIMEEXPIRED("onMatchTimeExpired"),
-	ONCOUNTDOWNTOEVENT("onCountdownToEvent");
+	ONCOUNTDOWNTOEVENT("onCountdownToEvent"),
+	ONENTERQUEUE("onEnterQueue")
+	;
 
 	String name;
 	MatchState(String name){
@@ -31,6 +33,7 @@ public enum MatchState implements CompetitionState{
 		str = str.toUpperCase();
 		return MatchState.valueOf(str);
 	}
+
 	public boolean isRunning() {
 		return this == MatchState.ONSTART;
 	}

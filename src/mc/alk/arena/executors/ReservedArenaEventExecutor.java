@@ -41,7 +41,7 @@ public class ReservedArenaEventExecutor extends EventExecutor{
 			Arena arena = event.getArena();
 			final int max = arena.getParameters().getMaxPlayers();
 			final String maxPlayers = max == ArenaParams.MAX ? "&6any&2 number of players" : max+"&2 players";
-			sendMessage(sender,"&2You have "+args[0]+"ed a &6" + event.getDetailedName() +
+			sendMessage(sender,"&2You have "+args[0]+"ed a &6" + event.getDisplayName() +
 					"&2 inside &6" + arena.getName() +" &2TeamSize=&6" + arena.getParameters().getTeamSizeRange() +"&2 #Teams=&6"+
 					arena.getParameters().getNTeamRange() +"&2 supporting "+maxPlayers +"&2 at &5"+arena.getName() );
 		} catch (InvalidEventException e) {
@@ -60,11 +60,16 @@ public class ReservedArenaEventExecutor extends EventExecutor{
 		if (openevent != null){
 			throw new InvalidEventException("&cThere is already an event open!");
 		}
+		EventOpenOptions eoo = EventOpenOptions.parseOptions(args, null);
+		Arena arena = eoo.getArena(eventParams,null);
+		eventParams.intersect(arena.getParameters());
+		//System.out.println("mp = " + mp + "   sq = " + specificparams +"   teamSize="+teamSize +"   nTeams="+nTeams);
+		arena.setParameters(eventParams);
+
 		ReservedArenaEvent event = new ReservedArenaEvent(eventParams);
 
 		checkOpenOptions(event, eventParams, args);
-		EventOpenOptions eoo = EventOpenOptions.parseOptions(args, null);
-		openEvent(event, eventParams, eoo);
+		openEvent(event, eventParams, eoo,arena);
 
 		controller.addOpenEvent(event);
 		return event;
@@ -90,24 +95,21 @@ public class ReservedArenaEventExecutor extends EventExecutor{
 		return true;
 	}
 
-	public static Arena openEvent(ReservedArenaEvent rae, EventParams ep, EventOpenOptions eoo) throws InvalidOptionException, InvalidEventException{
+	public static void openEvent(ReservedArenaEvent rae, EventParams ep, EventOpenOptions eoo, Arena arena) throws InvalidOptionException, InvalidEventException{
 		if (rae.isOpen())
 			throw new InvalidOptionException("&cThe event is already open");
 		eoo.updateParams(ep);
-		Arena arena = eoo.getArena(ep,null);
-		//System.out.println("mp = " + mp + "   sq = " + specificparams +"   teamSize="+teamSize +"   nTeams="+nTeams);
-		arena.setParameters(ep);
 		rae.setSilent(eoo.isSilent());
-		if (eoo.hasOption(EventOpenOption.FORCEJOIN)){
-			rae.openAllPlayersEvent(ep, arena);
-		} else if (eoo.hasOption(EventOpenOption.AUTO)){
+		if (eoo.hasOption(EventOpenOption.AUTO)){
 			ep.setSecondsTillStart(eoo.getSecTillStart());
 			ep.setAnnouncementInterval(eoo.getInterval());
 			rae.autoEvent(ep, arena);
 		} else {
 			rae.openEvent(ep, arena);
 		}
-		return arena;
+		if (eoo.hasOption(EventOpenOption.FORCEJOIN)){
+			rae.addAllOnline();}
+
 	}
 
 }

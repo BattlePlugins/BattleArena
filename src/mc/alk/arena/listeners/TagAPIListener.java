@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import mc.alk.arena.BattleArena;
+import mc.alk.arena.controllers.HeroesController;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -34,19 +35,46 @@ public enum TagAPIListener implements Listener {
 	}
 
 	public static void setNameColor(Player player, ChatColor teamColor) {
+		if (!player.isOnline())
+			return;
 		/// Register ourself if we are starting to need to listen
 		if (INSTANCE.playerName.isEmpty()){
 			Bukkit.getPluginManager().registerEvents(INSTANCE, BattleArena.getSelf());}
 		INSTANCE.playerName.put(player.getName(), teamColor);
-		TagAPI.refreshPlayer(player);
+		try{
+			TagAPI.refreshPlayer(player);
+		} catch (ClassCastException e){
+			/* For the plugin CommandSigns which use a "ProxyPlayer" which can't be cast to
+			 * a CraftPlayer, ignore the error */
+		}
 	}
 
-	public static void removeNameColor(Player player) {
+	public static void removeNameColor(final Player player) {
+		if (!player.isOnline() || !BattleArena.getSelf().isEnabled())
+			return;
 		if (INSTANCE.playerName.remove(player.getName()) != null){
-			TagAPI.refreshPlayer(player);
-			/// Unregister if we aren't listening for any players
-			if (INSTANCE.playerName.isEmpty()){
-				HandlerList.unregisterAll(INSTANCE);}
+			if (HeroesController.enabled()){
+				Bukkit.getScheduler().scheduleSyncDelayedTask(BattleArena.getSelf(), new Runnable(){
+					@Override
+					public void run() {
+						INSTANCE.removeName(player);
+					}
+				});
+			} else {
+				INSTANCE.removeName(player);
+			}
 		}
+	}
+
+	private void removeName(Player player){
+		try{
+			TagAPI.refreshPlayer(player);
+		} catch (ClassCastException e){
+			/* For the plugin CommandSigns which use a "ProxyPlayer" which can't be cast to
+			 * a CraftPlayer, ignore the error */
+		}
+		/// Unregister if we aren't listening for any players
+		if (INSTANCE.playerName.isEmpty()){
+			HandlerList.unregisterAll(INSTANCE);}
 	}
 }

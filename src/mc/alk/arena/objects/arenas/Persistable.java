@@ -20,6 +20,7 @@ import mc.alk.arena.util.SerializerUtil;
 
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.serialization.ConfigurationSerializable;
 import org.bukkit.inventory.ItemStack;
 
 public class Persistable {
@@ -31,14 +32,20 @@ public class Persistable {
 		}
 	}
 
-	public static void yamlToObjects(Arena arena, ConfigurationSection cs){
+	public static void yamlToObjects(Object object, ConfigurationSection cs){
 		if (cs == null)
 			return;
-		yamlToObjects(arena, arena.getClass(),cs);
+		yamlToObjects(object, object.getClass(),cs, null);
 	}
 
-	private static void yamlToObjects(Arena arena, Class<?> arenaClass, ConfigurationSection cs){
-		for(Field field : arenaClass.getDeclaredFields()){
+	public static void yamlToObjects(Object object, ConfigurationSection cs, Class<?> onlyCheckClass){
+		if (cs == null)
+			return;
+		yamlToObjects(object, object.getClass(),cs,onlyCheckClass);
+	}
+
+	private static void yamlToObjects(Object object, Class<?> objectClass, ConfigurationSection cs, Class<?> onlyCheckClass){
+		for(Field field : objectClass.getDeclaredFields()){
 			Class<?> type = field.getType();
 			String name = field.getName();
 			Annotation[] annotations = field.getDeclaredAnnotations();
@@ -46,28 +53,29 @@ public class Persistable {
 				if (!(a instanceof Persist || !cs.contains(name))){
 					continue;
 				}
+
 //				System.out.println("Type = " + type +"  " + name +"   " + annotations + "   " + cs.getString(name));
 				field.setAccessible(true);
 				try {
 					Object obj = null;
 					if (type == int.class){
-						field.setInt(arena, cs.getInt(name));
+						field.setInt(object, cs.getInt(name));
 					} else if (type == float.class){
-						field.setFloat(arena, (float)cs.getDouble(name));
+						field.setFloat(object, (float)cs.getDouble(name));
 					} else if (type == double.class){
-						field.setDouble(arena, cs.getDouble(name));
+						field.setDouble(object, cs.getDouble(name));
 					} else if (type == long.class){
-						field.setLong(arena, cs.getLong(name));
+						field.setLong(object, cs.getLong(name));
 					} else if (type == boolean.class){
-						field.setBoolean(arena, cs.getBoolean(name));
+						field.setBoolean(object, cs.getBoolean(name));
 					} else if (type == short.class){
-						field.setShort(arena, (short)cs.getInt(name));
+						field.setShort(object, (short)cs.getInt(name));
 					} else if (type == byte.class){
-						field.setByte(arena, (byte)cs.getInt(name));
+						field.setByte(object, (byte)cs.getInt(name));
 					} else if (type == char.class){
 						String str = cs.getString(name);
 						if (str != null && !str.isEmpty())
-							field.setChar(arena, str.charAt(0));
+							field.setChar(object, str.charAt(0));
 					} else if (type == Integer.class){
 						obj = cs.getInt(name);
 					} else if (type == Float.class){
@@ -139,13 +147,15 @@ public class Persistable {
 								newMap.put(k,v);
 						}
 						obj = newMap;
+					} else if (ConfigurationSerializable.class.isAssignableFrom(type)){
+//						obj = cs.get // TODO
 					} else if (YamlSerializable.class.isAssignableFrom(type)){
-						obj = createYamlSerializable(type,cs.getConfigurationSection(name));
+						obj = createYamlSerializable(type,cs.getConfigurationSection(name), cs.getString(name));
 					} else {
 						obj = yamlToObj(name,type,cs);
 					}
 					if (obj != null)
-						field.set(arena, obj);
+						field.set(object, obj);
 				} catch (NotPersistableException e) {
 					System.err.println(e.getMessage());
 				} catch (Exception e) {
@@ -153,9 +163,9 @@ public class Persistable {
 				}
 			}
 		}
-		Class<?> superClass = arenaClass.getSuperclass();
-		if (superClass != null && Arena.class.isAssignableFrom(superClass) ){
-			yamlToObjects(arena,superClass,cs);
+		Class<?> superClass = objectClass.getSuperclass();
+		if (superClass != null && (onlyCheckClass == null || onlyCheckClass.isAssignableFrom(superClass))){
+			yamlToObjects(object,superClass,cs, onlyCheckClass);
 		}
 	}
 
@@ -187,7 +197,7 @@ public class Persistable {
 		throw new NotPersistableException("Type " + type +" is not persistable. Not loading values for "+name);
 	}
 
-	private static Object createYamlSerializable(Class<?> clazz, ConfigurationSection cs) {
+	private static Object createYamlSerializable(Class<?> clazz, ConfigurationSection cs, String value) {
 		if (clazz == null)
 			return null;
 		Class<?>[] args = {};
@@ -196,7 +206,7 @@ public class Persistable {
 			YamlSerializable ys = (YamlSerializable) constructor.newInstance((Object[])args);
 			if (ys == null)
 				return null;
-			ys = (YamlSerializable) ys.yamlToObject(cs);
+			ys = (YamlSerializable) ys.yamlToObject(cs, value);
 			return ys;
 		} catch (NoSuchMethodException e){
 			System.err.println("If you have custom constructors for your YamlSerializable class you must also have a public default constructor");
@@ -208,17 +218,21 @@ public class Persistable {
 		return null;
 	}
 
-	public static Map<String, Object> objectsToYamlMap(Arena arena) {
+	public static Map<String, Object> objectsToYamlMap(Object object) {
+		return objectsToYamlMap(object,null);
+	}
+
+	public static Map<String, Object> objectsToYamlMap(Object object, Class<?> onlyCheckClass) {
 		Map<String,Object> map = new HashMap<String,Object>();
 
-		Class<?> arenaClass = arena.getClass();
-		objectsToYamlMap(arena,arenaClass,map);
+		Class<?> objectClass = object.getClass();
+		objectsToYamlMap(object,objectClass,map,onlyCheckClass);
 
 		return map;
 	}
 
-	private static void objectsToYamlMap(Arena arena, Class<?> arenaClass, Map<String,Object> map){
-		for(Field field : arenaClass.getDeclaredFields()){
+	private static void objectsToYamlMap(Object object, Class<?> objectClass, Map<String,Object> map, Class<?> onlyCheckClass){
+		for(Field field : objectClass.getDeclaredFields()){
 			Class<?> type = field.getType();
 			String name = field.getName();
 			Annotation[] annotations = field.getDeclaredAnnotations();
@@ -234,28 +248,28 @@ public class Persistable {
 					if (type == Integer.class || type == Float.class || type == Double.class ||
 							type == Byte.class || type == Boolean.class || type == Character.class ||
 							type == Short.class || type == Long.class || type==String.class){
-						obj = field.get(arena);
+						obj = field.get(object);
 					} else if (type == int.class){
-						map.put(name, field.getInt(arena));
+						map.put(name, field.getInt(object));
 					} else if (type == float.class){
-						map.put(name, field.getFloat(arena));
+						map.put(name, field.getFloat(object));
 					} else if (type == double.class){
-						map.put(name, field.getDouble(arena));
+						map.put(name, field.getDouble(object));
 					} else if (type == byte.class){
-						map.put(name, field.getByte(arena));
+						map.put(name, field.getByte(object));
 					} else if (type == boolean.class){
-						map.put(name, field.getBoolean(arena));
+						map.put(name, field.getBoolean(object));
 					} else if (type == char.class){
-						map.put(name, field.getChar(arena));
+						map.put(name, field.getChar(object));
 					} else if (type == short.class){
-						map.put(name, field.getShort(arena));
+						map.put(name, field.getShort(object));
 					} else if (type == long.class){
-						map.put(name, field.getLong(arena));
+						map.put(name, field.getLong(object));
 					} else if (type == Location.class || type == ItemStack.class){
-						obj = objToYaml(field.get(arena));
+						obj = objToYaml(field.get(object));
 					} else if (List.class.isAssignableFrom(type)){
 						@SuppressWarnings("unchecked")
-						List<Object> list = (List<Object>) field.get(arena);
+						List<Object> list = (List<Object>) field.get(object);
 						if (list == null)
 							continue;
 						List<Object> olist = new ArrayList<Object>();
@@ -266,7 +280,7 @@ public class Persistable {
 					} else if (Set.class.isAssignableFrom(type)){
 						/// Just convert to a list, then we can put it back into set form later when we deserialize
 						@SuppressWarnings("unchecked")
-						Set<Object> set = (Set<Object>) field.get(arena);
+						Set<Object> set = (Set<Object>) field.get(object);
 						if (set == null)
 							continue;
 						List<Object> oset = new ArrayList<Object>();
@@ -276,7 +290,7 @@ public class Persistable {
 						obj = oset;
 					} else if (ConcurrentHashMap.class.isAssignableFrom(type)){
 						@SuppressWarnings("unchecked")
-						Map<Object,Object> mymap = (ConcurrentHashMap<Object,Object>) field.get(arena);
+						Map<Object,Object> mymap = (ConcurrentHashMap<Object,Object>) field.get(object);
 						if (mymap == null)
 							continue;
 						Map<Object,Object> oset = new HashMap<Object,Object>();
@@ -292,7 +306,7 @@ public class Persistable {
 						obj = oset;
 					} else if (Map.class.isAssignableFrom(type)){
 						@SuppressWarnings("unchecked")
-						Map<Object,Object> mymap = (Map<Object,Object>) field.get(arena);
+						Map<Object,Object> mymap = (Map<Object,Object>) field.get(object);
 						if (mymap == null)
 							continue;
 						Map<Object,Object> oset = new HashMap<Object,Object>();
@@ -307,7 +321,7 @@ public class Persistable {
 						}
 						obj = oset;
 					} else if (YamlSerializable.class.isAssignableFrom(type)){
-						YamlSerializable ys = (YamlSerializable) field.get(arena);
+						YamlSerializable ys = (YamlSerializable) field.get(object);
 						if (ys != null)
 							obj = ys.objectToYaml();
 					} else {
@@ -324,9 +338,10 @@ public class Persistable {
 				}
 			}
 		}
-		Class<?> superClass = arenaClass.getSuperclass();
-		if (superClass != null && Arena.class.isAssignableFrom(superClass) ){
-			objectsToYamlMap(arena,superClass,map);
+		Class<?> superClass = objectClass.getSuperclass();
+
+		if (superClass != null && (onlyCheckClass == null || onlyCheckClass.isAssignableFrom(superClass))){
+			objectsToYamlMap(object,superClass,map,onlyCheckClass);
 		}
 
 

@@ -20,10 +20,12 @@ import org.bukkit.plugin.EventExecutor;
 public abstract class BAEventListener implements Listener  {
 
 	final Class<? extends Event> bukkitEvent;
+	final EventPriority bukkitPriority;
 
-	public BAEventListener(final Class<? extends Event> bukkitEvent) {
+	public BAEventListener(final Class<? extends Event> bukkitEvent, EventPriority bukkitPriority) {
 		if (Defaults.DEBUG_EVENTS) System.out.println("Registering BAEventListener for type " + bukkitEvent);
 		this.bukkitEvent = bukkitEvent;
+		this.bukkitPriority = bukkitPriority;
 	}
 	public Class<? extends Event> getEvent(){
 		return bukkitEvent;
@@ -34,20 +36,28 @@ public abstract class BAEventListener implements Listener  {
 
 	public void startSpecificPlayerListening(){
 		EventExecutor executor = new EventExecutor() {
-			public void execute(Listener listener, Event event) throws EventException {
+			public void execute(final Listener listener, final Event event) throws EventException {
+				if (event.getClass() != bukkitEvent && !bukkitEvent.isAssignableFrom(event.getClass())){
+					return;}
 				doSpecificPlayerEvent(event);
 			}
 		};
-		Bukkit.getPluginManager().registerEvent(bukkitEvent, this, EventPriority.HIGHEST, executor,BattleArena.getSelf());
+		if (Defaults.TESTSERVER) return;
+		Bukkit.getPluginManager().registerEvent(bukkitEvent, this, bukkitPriority, executor,BattleArena.getSelf());
 	}
+
+	static long total = 0;
+	static long count=0;
 
 	public void startMatchListening(){
 		EventExecutor executor = new EventExecutor() {
-			public void execute(Listener listener, Event event) throws EventException {
+			public void execute(final Listener listener, final Event event) throws EventException {
+				if (event.getClass() != bukkitEvent && !bukkitEvent.isAssignableFrom(event.getClass())){
+					return;}
 				doMatchEvent(event);
 			}
 		};
-		Bukkit.getPluginManager().registerEvent(bukkitEvent, this, EventPriority.HIGHEST, executor,BattleArena.getSelf());
+		Bukkit.getPluginManager().registerEvent(bukkitEvent, this, bukkitPriority, executor,BattleArena.getSelf());
 	}
 
 	public abstract void doSpecificPlayerEvent(Event event);

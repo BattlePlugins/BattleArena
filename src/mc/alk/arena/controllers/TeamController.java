@@ -47,10 +47,35 @@ public enum TeamController implements Listener, TeamHandler {
 	public static Team getTeam(ArenaPlayer player) {
 		return INSTANCE.handledTeams(player);
 	}
+
 	public static Team getTeamNotTeamController(ArenaPlayer player) {
 		return INSTANCE.handledTeamsNotTeamController(player);
 	}
+	public static void removeAllHandlers() {
+		INSTANCE.removeAllHandledTeams();
+	}
 
+	public static void removeTeamHandlers(Team t) {
+		INSTANCE.removeHandledTeam(t);
+	}
+	private void removeHandledTeam(Team t) {
+		synchronized(handlers){
+			List<TeamHandler> hs = handlers.remove(t);
+			if (hs != null){
+				for (TeamHandler th: hs){
+					for (ArenaPlayer ap: t.getPlayers()){
+						th.leave(ap);}
+				}
+			}
+		}
+	}
+	private void removeAllHandledTeams() {
+		selfFormedTeams.clear();
+		formingTeams.clear();
+		synchronized(handlers){
+			handlers.clear();
+		}
+	}
 	private Team handledTeams(ArenaPlayer p) {
 		synchronized(handlers){
 			for (Team t: handlers.keySet()){
@@ -82,6 +107,8 @@ public enum TeamController implements Listener, TeamHandler {
 			if (t.hasMember(pl))
 				return t;
 		}
+		if (HeroesController.hasHeroes)
+			return HeroesController.getTeam(pl.getPlayer());
 		return null;
 	}
 
@@ -223,21 +250,24 @@ public enum TeamController implements Listener, TeamHandler {
 	}
 
 
-	public static void removeTeamHandler(Team team, TeamHandler teamHandler) {
-		INSTANCE.removeHandler(team, teamHandler);
+	public static boolean removeTeamHandler(Team team, TeamHandler teamHandler) {
+		return INSTANCE.removeHandler(team, teamHandler);
 	}
-	private void removeHandler(Team team, TeamHandler teamHandler){
+
+	private boolean removeHandler(Team team, TeamHandler teamHandler){
 		if (DEBUG) System.out.println("------- removing team="+team+" and handler =" + teamHandler);
 		List<TeamHandler> ths = handlers.get(team);
 		if (ths != null){
 			ths.remove(teamHandler);
 			if (ths.isEmpty())
 				handlers.remove(team);
+			return true;
 		} else {
-			handlers.remove(team);
+			return handlers.remove(team) != null;
 		}
 		//		logHandlerList("removeTeam " + t +"   " + th);
 	}
+
 	public static void removeTeams(Collection<Team> teams, TeamHandler teamHandler) {
 		for (Team t: teams){
 			removeTeamHandler(t,teamHandler);
@@ -288,4 +318,5 @@ public enum TeamController implements Listener, TeamHandler {
 	public boolean leave(ArenaPlayer p) {
 		return true;
 	}
+
 }

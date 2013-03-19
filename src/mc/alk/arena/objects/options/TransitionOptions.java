@@ -6,8 +6,10 @@ import java.util.Map;
 import java.util.Set;
 
 import mc.alk.arena.Defaults;
+import mc.alk.arena.controllers.MobArenaInterface;
 import mc.alk.arena.objects.ArenaClass;
 import mc.alk.arena.objects.ArenaPlayer;
+import mc.alk.arena.objects.CommandLineString;
 import mc.alk.arena.objects.MatchParams;
 import mc.alk.arena.objects.MatchState;
 import mc.alk.arena.objects.MatchTransitions;
@@ -16,10 +18,11 @@ import mc.alk.arena.objects.exceptions.InvalidOptionException;
 import mc.alk.arena.util.EffectUtil;
 import mc.alk.arena.util.InventoryUtil;
 import mc.alk.arena.util.InventoryUtil.ArmorLevel;
-import mc.alk.arena.util.Util;
-import mc.alk.arena.util.Util.MinMax;
+import mc.alk.arena.util.MinMax;
 
+import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
@@ -27,69 +30,27 @@ import org.bukkit.potion.PotionEffect;
 
 @SuppressWarnings("unchecked")
 public class TransitionOptions {
-	public static enum TransitionOption{
-		TELEPORTWAITROOM("teleportWaitRoom",false),TELEPORTIN ("teleportIn",false), TELEPORTOUT("teleportOut",false),
-		TELEPORTTO("teleportTo", true), TELEPORTONARENAEXIT("teleportOnArenaExit",true),
-		TELEPORTWINNER("teleportWinner",true), TELEPORTLOSER("teleportLoser", true),
-		TELEPORTBACK("teleportBack",false),
-		NOTELEPORT("noTeleport", false), NOWORLDCHANGE("noWorldChange",false),
-		RESPAWN ("respawn",false), RANDOMRESPAWN ("randomRespawn",false), RESPAWNWITHCLASS("respawnWithClass", false),
-		CLEARINVENTORY ("clearInventory",false), NEEDARMOR ("needArmor",false), NOINVENTORY("noInventory",false),
-		CLEARINVENTORYONFIRSTENTER ("clearInventoryOnFirstEnter",false),
-		NEEDITEMS ("needItems",false), GIVEITEMS("giveItems",false), GIVECLASS("giveClass",false),
-		LEVELRANGE("levelRange",true),
-		HEALTH("health",true), HUNGER("hunger",true),
-		MONEY("money",true), EXPERIENCE("experience",true),
-		PVPON("pvpOn",false), PVPOFF("pvpOff",false),INVINCIBLE("invincible",false),
-		BLOCKBREAKOFF("blockBreakOff",false), BLOCKBREAKON("blockBreakOn",false),
-		BLOCKPLACEOFF("blockPlaceOff",false), BLOCKPLACEON("blockPlaceOn",false),
-		DROPITEMOFF("dropItemOff",false),
-		DISGUISEALLAS("disguiseAllAs",true), UNDISGUISE("undisguise",false),
-		ENCHANTS("enchants",false), DEENCHANT("deEnchant",false),
-		STOREALL("storeAll",false), RESTOREALL("restoreAll", false),
-		STOREEXPERIENCE("storeExperience",false), RESTOREEXPERIENCE("restoreExperience",false),
-		STOREGAMEMODE("storeGamemode",false), RESTOREGAMEMODE("restoreGamemode",false),
-		STOREITEMS("storeItems",false), RESTOREITEMS("restoreItems",false),
-		STOREHEROCLASS("storeHeroClass",false), RESTOREHEROCLASS("restoreHeroClass",false),
-		WGCLEARREGION("wgClearRegion",false),  WGRESETREGION("wgResetRegion",false),
-		WGNOLEAVE("wgNoLeave",false), WGNOENTER("wgNoEnter", false),
-		WOOLTEAMS("woolTeams",false), ALWAYSWOOLTEAMS("alwaysWoolTeams", false),
-		ALWAYSTEAMNAMES("alwaysTeamNames", false),
-		ADDPERMS("addPerms", false), REMOVEPERMS("removePerms", false),
-		SAMEWORLD("sameWorld",false), WITHINDISTANCE("withinDistance",true)
-		;
-		String name;
-		boolean hasValue = false;
-		TransitionOption(String name,Boolean hasValue){this.name= name;this.hasValue = hasValue;}
-		@Override
-		public String toString(){return name;}
-		public boolean hasValue(){return hasValue;}
-	};
 
 	Map<TransitionOption,Object> options = null;
-	List<PotionEffect> effects = null;
-	Double money =null;
-	Integer exp = null;
-	Integer health = null;
-	Integer hunger = null;
-	String disguiseAllAs = null;
-	Integer withinDistance = null;
-	Location teleportWinner = null;
 
 	public TransitionOptions() {}
 	public TransitionOptions(TransitionOptions o) {
 		if (o == null)
 			return;
 		if (o.options != null) this.options = new EnumMap<TransitionOption,Object>(o.options);
-		//		this.items = o.items;
-		//		this.classes = o.classes;
-		this.effects = o.effects;
-		this.money = o.money;
-		this.exp = o.exp;
-		this.health= o.health;
-		this.hunger = o.hunger;
-		this.disguiseAllAs = o.disguiseAllAs;
-		this.withinDistance = o.withinDistance;
+	}
+
+	public void addOptions(TransitionOptions optionSet) {
+		if (optionSet.options == null)
+			return;
+		addOptions(optionSet.options);
+	}
+
+	public void addOptions(Map<TransitionOption,Object> options) {
+		if (this.options==null)
+			this.options = new EnumMap<TransitionOption,Object>(options);
+		else
+			this.options.putAll(options);
 	}
 
 	public void setOptions(Set<String> options) {
@@ -99,7 +60,7 @@ public class TransitionOptions {
 		}
 	}
 
-	public void setMatchOptions(Map<TransitionOption,Object> options) {
+	public void setOptions(Map<TransitionOption,Object> options) {
 		this.options =new EnumMap<TransitionOption,Object>(options);
 	}
 
@@ -113,9 +74,11 @@ public class TransitionOptions {
 		return o == null ? null : (List<ItemStack>) o;
 	}
 
-	public void setEffects(List<PotionEffect> effectList) {this.effects = effectList;}
-	public List<PotionEffect> getEffects(){return effects;}
-	private boolean hasEffects() {return effects != null;}
+	public List<PotionEffect> getEffects(){
+		Object o = options.get(TransitionOption.ENCHANTS);
+		return o == null ? null : (List<PotionEffect>) o;
+	}
+	private boolean hasEffects() {return getEffects() != null;}
 	public boolean clearInventory() {return options.containsKey(TransitionOption.CLEARINVENTORY);}
 	public boolean needsArmor() {return options.containsKey(TransitionOption.NEEDARMOR);}
 	public boolean needsItems() {return options.containsKey(TransitionOption.NEEDITEMS);}
@@ -132,25 +95,51 @@ public class TransitionOptions {
 	public boolean blockBreakOff() {return options.containsKey(TransitionOption.BLOCKBREAKOFF);}
 	public boolean blockPlaceOff() {return options.containsKey(TransitionOption.BLOCKPLACEOFF);}
 
-	public Integer getHealth() {return health;}
-	public Integer getHunger() {return hunger;}
+	public Integer getHealth() {return getInt(TransitionOption.HEALTH);}
+	public Integer getHealthP() {return getInt(TransitionOption.HEALTHP);}
+	public Integer getHunger() {return getInt(TransitionOption.HUNGER);}
+	public Integer getMagic() { return getInt(TransitionOption.MAGIC);}
+	public Integer getMagicP() { return getInt(TransitionOption.MAGICP);}
+	public Integer getWithinDistance() {return getInt(TransitionOption.WITHINDISTANCE);}
+	public GameMode getGameMode() {return getGameMode(TransitionOption.GAMEMODE);}
+	public List<CommandLineString> getDoCommands() {
+		final Object o = options.get(TransitionOption.DOCOMMANDS);
+		return o == null ? null : (List<CommandLineString>) o;
+	}
 
-	public void setMoney(double money) {this.money = money;}
-	public Double getMoney(){return money;}
-	public boolean hasMoney(){return money != null && money > 0;}
+	public Integer getInt(TransitionOption option){
+		final Object o = options.get(option);
+		return o == null ? null : (Integer) o;
+	}
 
-	public void setGiveExperience(int exp) {this.exp = exp;}
-	public Integer getExperience(){return exp;}
-	public boolean hasExperience(){return exp!= null && exp > 0;}
+	public Double getDouble(TransitionOption option){
+		final Object o = options.get(option);
+		return o == null ? null : (Double) o;
+	}
 
-	public void setHealth(Integer h) {health = h;}
-	public void setHunger(Integer h) {hunger = h;}
+	public String getString(TransitionOption option){
+		final Object o = options.get(option);
+		return o == null ? null : (String) o;
+	}
 
-	public void setDisguiseAllAs(String str) {this.disguiseAllAs = str;}
-	public String getDisguiseAllAs() {return disguiseAllAs;}
+	public GameMode getGameMode(TransitionOption option){
+		final Object o = options.get(option);
+		return o == null ? null : (GameMode) o;
+	}
+
+	public Double getMoney(){return getDouble(TransitionOption.MONEY);}
+	public boolean hasMoney(){
+		Double d = getDouble(TransitionOption.MONEY);
+		return d != null && d > 0;
+	}
+	public Integer getInvulnerable(){return getInt(TransitionOption.INVULNERABLE);}
+	public Integer getExperience(){return getInt(TransitionOption.EXPERIENCE);}
+	public boolean hasExperience(){return options.containsKey(TransitionOption.EXPERIENCE);}
+
+	public String getDisguiseAllAs() {return getString(TransitionOption.DISGUISEALLAS);}
 	public Boolean undisguise() {return options.containsKey(TransitionOption.UNDISGUISE);}
 
-	public boolean playerReady(ArenaPlayer p) {
+	public boolean playerReady(ArenaPlayer p, World w) {
 		if (p==null || !p.isOnline() || p.isDead())
 			return false;
 		if (needsItems()){
@@ -161,8 +150,17 @@ public class TransitionOptions {
 					return false;
 			}
 		}
+		/// Inside MobArena?
+		if (MobArenaInterface.hasMobArena() && MobArenaInterface.insideMobArena(p)){
+			return false;
+		}
+
 		if (options.containsKey(TransitionOption.NOINVENTORY)){
 			if (InventoryUtil.hasAnyItem(p.getPlayer()))
+				return false;
+		}
+		if (options.containsKey(TransitionOption.SAMEWORLD) && w!=null){
+			if (p.getLocation().getWorld().getUID() != w.getUID())
 				return false;
 		}
 		if (needsArmor()){
@@ -196,6 +194,7 @@ public class TransitionOptions {
 			hasSomething = true;
 			sb.append("&5 - &6Clear Inventory");
 		}
+
 		if (needsArmor()){
 			hasSomething = true;
 			sb.append("&5 - &6Armor");
@@ -204,12 +203,10 @@ public class TransitionOptions {
 			MinMax mm = (MinMax) options.get(TransitionOption.LEVELRANGE);
 			sb.append("&a - lvl="+mm.toString());
 		}
-
-		sb.append("&5 - &6Armor");
 		return hasSomething ? sb.toString() : null;
 	}
 
-	public String getNotReadyMsg(ArenaPlayer p, String headerMsg) {
+	public String getNotReadyMsg(ArenaPlayer p, World w, String headerMsg) {
 		//		System.out.println(" Here in getNot ready msg with " + p.getName());
 		StringBuilder sb = new StringBuilder(headerMsg);
 		boolean isReady = true;
@@ -231,12 +228,25 @@ public class TransitionOptions {
 				isReady = false;
 			}
 		}
+		if (options.containsKey(TransitionOption.SAMEWORLD) && w!=null){
+			if (p.getLocation().getWorld().getUID() != w.getUID()){
+				sb.append("&5 -&c Not in same world\n");
+				isReady = false;
+			}
+		}
+		/// Inside MobArena?
+		if (MobArenaInterface.hasMobArena() && MobArenaInterface.insideMobArena(p)){
+			isReady = false;
+			sb.append("&5 - &4You are Inside Mob Arena");
+		}
+
 		if (needsArmor()){
 			if (!InventoryUtil.hasArmor(p.getPlayer())){
 				sb.append("&&5 - &6Armor\n");
 				isReady = false;
 			}
 		}
+
 		if (options.containsKey(TransitionOption.LEVELRANGE)){
 			MinMax mm = (MinMax) options.get(TransitionOption.LEVELRANGE);
 			if (!mm.contains(p.getLevel())){
@@ -264,7 +274,7 @@ public class TransitionOptions {
 			hasSomething = true;
 			sb.append("&5 - &6" + getMoney()+" " + Defaults.MONEY_STR);
 		}
-		if (hasItems()){
+		if (getGiveItems() != null){
 			hasSomething = true;
 			List<ItemStack> items = getGiveItems();
 			ArmorLevel lvl = InventoryUtil.hasArmorSet(items);
@@ -337,6 +347,10 @@ public class TransitionOptions {
 		return options != null && options.containsKey(op);
 	}
 
+	public Object removeOption(TransitionOption op) {
+		return options != null ? options.remove(op) : null;
+	}
+
 	public static String getInfo(MatchParams sq, String name) {
 		StringBuilder sb = new StringBuilder();
 		MatchTransitions at = sq.getTransitionOptions();
@@ -348,7 +362,7 @@ public class TransitionOptions {
 		String firstPlacePrizes = at.getGiveString(MatchState.FIRSTPLACE);
 		String participantPrizes = at.getGiveString(MatchState.PARTICIPANTS);
 		boolean rated = sq.isRated();
-		String teamSizes = Util.getStr(sq.getMinTeamSize(),sq.getMaxTeamSize());
+		String teamSizes = MinMax.getStr(sq.getMinTeamSize(),sq.getMaxTeamSize());
 		sb.append("&eThis is "+ (rated? "a &4Rated" : "an &aUnrated") +"&e "+name+". " );
 		sb.append("&eTeam size=&6" + teamSizes);
 		sb.append("\n&eRequirements to Join:");
@@ -376,6 +390,11 @@ public class TransitionOptions {
 		return o == null ? null : (Map<Integer, ArenaClass>) o;
 	}
 
+	public Map<Integer, String> getDisguises(){
+		Object o = options.get(TransitionOption.GIVEDISGUISE);
+		return o == null ? null : (Map<Integer, String>) o;
+	}
+
 	@Override
 	public String toString(){
 		StringBuilder sb = new StringBuilder("[MatchOptions=");
@@ -391,12 +410,6 @@ public class TransitionOptions {
 		}
 		sb.append("]");
 		return sb.toString();
-	}
-	public void setWithinDistance(Integer value) {
-		withinDistance = value;
-	}
-	public Integer getWithinDistance() {
-		return withinDistance;
 	}
 
 	public List<String> getAddPerms() {
@@ -419,4 +432,5 @@ public class TransitionOptions {
 		final Object o = options.get(to);
 		return o == null ? null : (Location) o;
 	}
+
 }

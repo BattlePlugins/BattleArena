@@ -15,8 +15,13 @@ public class MatchParams extends ArenaParams implements Comparable<MatchParams>{
 	Integer matchTime, intervalTime;
 	AnnouncementOptions ao = null;
 
+	Integer nDeaths = 1;
+	boolean overrideDefaultBattleTracker = true;
+	int numConcurrentCompetitions = Integer.MAX_VALUE;
+
 	public MatchParams(ArenaType at, Rating rating, VictoryType vc) {
-		super(at,rating);
+		super(at);
+		this.setRating(rating);
 		this.vc = vc;
 	}
 
@@ -27,19 +32,16 @@ public class MatchParams extends ArenaParams implements Comparable<MatchParams>{
 		this.matchTime = q.matchTime;
 		this.intervalTime = q.intervalTime;
 		this.ao = q.ao;
+		this.nDeaths = q.nDeaths;
+		this.numConcurrentCompetitions = q.numConcurrentCompetitions;
 	}
 
-	@Override
-	public int getMinTeams(){return minTeams;}
-	@Override
-	public int getMinTeamSize(){ return minTeamSize;}
 	public VictoryType getVictoryType() {return vc;}
 
-	public int getSize() {return minTeamSize;}
-	public String getPrefix(){
-		return prefix;
-	}
+	public String getPrefix(){return prefix;}
+
 	public void setPrefix(String str){prefix = str;}
+
 	public void setCommand(String str){cmd = str;}
 
 	public int compareTo(MatchParams other) {
@@ -68,7 +70,12 @@ public class MatchParams extends ArenaParams implements Comparable<MatchParams>{
 	public void setIntervalTime(Integer intervalTime) {
 		this.intervalTime = intervalTime;
 	}
-
+	public void setNLives(Integer ndeaths){
+		this.nDeaths = ndeaths;
+	}
+	public Integer getNLives(){
+		return nDeaths;
+	}
 	@Override
 	public int hashCode() {
 		return ((arenaType.ordinal()) << 27) +(rating.ordinal() << 25) + (minTeams<<12)+(vc.ordinal() << 8) + minTeamSize;
@@ -96,5 +103,24 @@ public class MatchParams extends ArenaParams implements Comparable<MatchParams>{
 
 	public ChatColor getColor() {
 		return MessageUtil.getFirstColor(prefix);
+	}
+
+	public void setOverrideBattleTracker(boolean enable) {
+		overrideDefaultBattleTracker = enable;
+	}
+	public boolean getOverrideBattleTracker() {
+		return overrideDefaultBattleTracker;
+	}
+
+	public void setNConcurrentCompetitions(int number) {
+		this.numConcurrentCompetitions = number;
+	}
+
+	public int getNConcurrentCompetitions(){
+		return numConcurrentCompetitions;
+	}
+
+	public JoinType getJoinType() {
+		return JoinType.QUEUE;
 	}
 }

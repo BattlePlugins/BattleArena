@@ -32,8 +32,8 @@ public class EventMessageImpl extends MessageSerializer implements EventMessageH
 
 	@Override
 	public void sendCountdownTillEvent(Channel serverChannel, int seconds) {
-		Message message = getMessage("event.countdownTillEvent");
-		Message serverMessage = getMessage("event.server_countdownTillEvent");
+		Message message = getNodeMessage("event.countdownTillEvent");
+		Message serverMessage = getNodeMessage("event.server_countdownTillEvent");
 		Set<MessageOption> ops = message.getOptions();
 		if (serverChannel != Channel.NullChannel){
 			ops.addAll(serverMessage.getOptions());
@@ -51,34 +51,15 @@ public class EventMessageImpl extends MessageSerializer implements EventMessageH
 	@Override
 	public void sendEventStarting(Channel serverChannel, Collection<Team> teams) {
 		final String nTeamPath = getStringPathFromSize(teams.size());
-		Message message = getMessage("event."+ nTeamPath+".start");
-		Message serverMessage = getMessage("event."+ nTeamPath+".server_start");
-		Set<MessageOption> ops = message.getOptions();
-		if (serverChannel != Channel.NullChannel){
-			ops.addAll(serverMessage.getOptions());
-		}
-
-		String msg = message.getMessage();
-		MessageFormatter msgf = new MessageFormatter(this, mp, ops.size(), teams.size(), message, ops);
-		msgf.formatCommonOptions(teams);
-		for (Team t: teams){
-			msgf.formatTeamOptions(t,false);
-			msgf.formatTwoTeamsOptions(t, teams);
-			msgf.formatTeams(teams);
-			String newmsg = msgf.getFormattedMessage(message);
-			t.sendMessage(newmsg);
-		}
-
-		if (serverChannel != Channel.NullChannel){
-			msg = msgf.getFormattedMessage(serverMessage);
-			serverChannel.broadcast(msg);
-		}
+		Message message = getNodeMessage("event."+ nTeamPath+".start");
+		Message serverMessage = getNodeMessage("event."+ nTeamPath+".server_start");
+		formatAndSend(serverChannel, teams, message, serverMessage);
 	}
 
 	@Override
-	public void sendEventVictory(Channel serverChannel, Team victor, Collection<Team> losers) {
+	public void sendEventVictory(Channel serverChannel, Collection<Team> victors, Collection<Team> losers) {
 		final String nTeamPath = getStringPathFromSize(losers.size()+1);
-		sendVictory(serverChannel,victor,losers,mp,"event."+nTeamPath+".victory", "event."+nTeamPath+".loss",
+		sendVictory(serverChannel,victors,losers,mp,"event."+nTeamPath+".victory", "event."+nTeamPath+".loss",
 				"event."+nTeamPath+".server_victory");
 	}
 
@@ -91,9 +72,9 @@ public class EventMessageImpl extends MessageSerializer implements EventMessageH
 		final String nTeamPath = getStringPathFromSize(mp.getMinTeams());
 		Message serverMessage;
 		if (mp.getMinTeamSize() > 1)
-			serverMessage = getMessage("event."+nTeamPath+".server_open_teamSizeGreaterThanOne");
+			serverMessage = getNodeMessage("event."+nTeamPath+".server_open_teamSizeGreaterThanOne");
 		else
-			serverMessage = getMessage("event."+nTeamPath+".server_open");
+			serverMessage = getNodeMessage("event."+nTeamPath+".server_open");
 		Set<MessageOption> ops = serverMessage.getOptions();
 		String msg = serverMessage.getMessage();
 		MessageFormatter msgf = new MessageFormatter(this, event.getParams(), ops.size(), 0, serverMessage, ops);
@@ -113,24 +94,48 @@ public class EventMessageImpl extends MessageSerializer implements EventMessageH
 	}
 
 	@Override
-	public void sendEventCancelled(Channel serverChannel) {
-		serverChannel.broadcast(mp.getPrefix()+"&e has been cancelled!");
+	public void sendEventCancelled(Channel serverChannel, Collection<Team> teams) {
+		Message message = getNodeMessage("event.team_cancelled");
+		Message serverMessage = getNodeMessage("event.server_cancelled");
+		formatAndSend(serverChannel, teams, message, serverMessage);
+	}
+
+	private void formatAndSend(Channel serverChannel, Collection<Team> teams, Message message, Message serverMessage) {
+		Set<MessageOption> ops = message.getOptions();
+		if (serverChannel != Channel.NullChannel){
+			ops.addAll(serverMessage.getOptions());
+		}
+
+		String msg = message.getMessage();
+		MessageFormatter msgf = new MessageFormatter(this, mp, ops.size(), teams.size(), message, ops);
+		msgf.formatCommonOptions(teams);
+		for (Team t: teams){
+			msgf.formatTeamOptions(t,false);
+			msgf.formatTeams(teams);
+			String newmsg = msgf.getFormattedMessage(message);
+			t.sendMessage(newmsg);
+		}
+
+		if (serverChannel != Channel.NullChannel){
+			msg = msgf.getFormattedMessage(serverMessage);
+			serverChannel.broadcast(msg);
+		}
 	}
 
 	@Override
 	public void sendCantFitTeam(Team t) {
-		t.sendMessage("&cThe &6" + event.getDetailedName()+"&c is full");
+		t.sendMessage("&cThe &6" + event.getDisplayName()+"&c is full");
 	}
 
 	@Override
 	public void sendWaitingForMorePlayers(Team team, int remaining) {
-		team.sendMessage("&eYou have joined the &6" + event.getDetailedName());
+		team.sendMessage("&eYou have joined the &6" + event.getDisplayName());
 		team.sendMessage("&eYou will enter the Event when &6" +remaining+"&e more "+MessageUtil.playerOrPlayers(remaining)+
 				"&e have joined to make your team");
 	}
 
 	@Override
-	public void sendEventDraw(Channel serverChannel, Collection<Team> participants) {
+	public void sendEventDraw(Channel serverChannel, Collection<Team> participants, Collection<Team> losers) {
 		final String nTeamPath = getStringPathFromSize(participants.size());
 		sendVictory(serverChannel,null,participants,mp,"event."+nTeamPath+".draw","event."+nTeamPath+".draw",
 				"event."+nTeamPath+".server_draw");

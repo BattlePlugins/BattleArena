@@ -4,7 +4,6 @@ import java.lang.reflect.Constructor;
 import java.util.LinkedHashMap;
 
 import mc.alk.arena.competition.match.Match;
-import mc.alk.arena.controllers.MethodController;
 import mc.alk.arena.util.CaseInsensitiveMap;
 
 import org.bukkit.plugin.Plugin;
@@ -14,7 +13,6 @@ public class VictoryType {
 	static public LinkedHashMap<String,Class<?>> classes = new LinkedHashMap<String,Class<?>>();
 	static public CaseInsensitiveMap<VictoryType> types = new CaseInsensitiveMap<VictoryType>();
 
-	public static VictoryType DEFAULT = null;
 	static int count =0;
 	final String name;
 	final Plugin ownerPlugin;
@@ -26,13 +24,18 @@ public class VictoryType {
 
 		if (!types.containsKey(name))
 			types.put(name,this);
-		if (name.equalsIgnoreCase("LastManStanding")) DEFAULT = this;
 	}
 
 	public static VictoryType fromString(final String type) {
-		if (type==null)
-			return null;
-		return types.get(type);
+		return type == null ? null : types.get(type);
+	}
+
+	public static VictoryType getType(VictoryCondition vc) {
+		return vc == null ? null : types.get(vc.getClass());
+	}
+
+	public static VictoryType getType(Class<? extends VictoryCondition> vc) {
+		return vc == null ? null : types.get(vc.getSimpleName());
 	}
 
 	public static String getValidList() {
@@ -52,6 +55,7 @@ public class VictoryType {
 	public String getName() {
 		return name;
 	}
+
 	public static VictoryCondition createVictoryCondition(Match match) {
 		VictoryType vt = match.getParams().getVictoryType();
 		Class<?> vcClass = classes.get(vt.getName());
@@ -61,6 +65,8 @@ public class VictoryType {
 		try {
 			Constructor<?> constructor = vcClass.getConstructor(args);
 			VictoryCondition newVC = (VictoryCondition) constructor.newInstance(match);
+			if (newVC instanceof NLives){
+				((NLives)newVC).setMaxLives(match.getParams().getNLives());}
 			return newVC;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -75,8 +81,6 @@ public class VictoryType {
 		if (!types.containsKey(vcName)){
 			new VictoryType(vcName,plugin);
 		}
-		/// Register our methods
-		MethodController.addMethods(vc, vc.getMethods());
 	}
 
 	public static boolean registered(VictoryCondition vc){
