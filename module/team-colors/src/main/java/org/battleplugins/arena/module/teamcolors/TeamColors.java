@@ -13,7 +13,9 @@ import org.battleplugins.arena.event.player.ArenaTeamLeaveEvent;
 import org.battleplugins.arena.module.ArenaModule;
 import org.battleplugins.arena.module.ArenaModuleInitializer;
 import org.battleplugins.arena.options.ArenaOptionType;
+import org.battleplugins.arena.options.NametagOption;
 import org.battleplugins.arena.options.types.BooleanArenaOption;
+import org.battleplugins.arena.options.types.EnumArenaOption;
 import org.battleplugins.arena.team.ArenaTeam;
 import org.battleplugins.arena.team.ArenaTeams;
 import org.bukkit.Bukkit;
@@ -21,6 +23,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.scoreboard.Team;
 
+import org.battleplugins.arena.config.ArenaOption;
 /**
  * A module that adds team colors to a player's name.
  */
@@ -29,6 +32,8 @@ public class TeamColors implements ArenaModuleInitializer {
     public static final String ID = "team-colors";
 
     public static final ArenaOptionType<BooleanArenaOption> TEAM_PREFIXES = ArenaOptionType.create("team-prefixes", BooleanArenaOption::new);
+    public static final ArenaOptionType<EnumArenaOption<NametagOption>> NAME_TAG_VISIBILITY = ArenaOptionType.create("name-tag-visibility", params -> new EnumArenaOption<>(params, NametagOption.class, "option"));
+
 
     @EventHandler
     public void onJoin(ArenaJoinEvent event) {
@@ -49,6 +54,25 @@ public class TeamColors implements ArenaModuleInitializer {
                     }
                 }
 
+            // Apply NAME_TAG_VISIBILITY option
+        final Team finalBukkitTeam = bukkitTeam;
+        event.getCompetition().option(NAME_TAG_VISIBILITY).ifPresent(option -> {
+            NametagOption nametagOption = option.getOption();
+            switch (nametagOption) {
+                case ALWAYS:
+                    finalBukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.ALWAYS);
+                    break;
+                case NEVER:
+                    finalBukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
+                    break;
+                case FOR_OTHER_TEAMS:
+                    finalBukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OTHER_TEAMS);
+                    break;
+                case FOR_OWN_TEAM:
+                    finalBukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
+                    break;
+            }
+        });
                 // If players are already on the team, add them to the Bukkit team
                 for (ArenaPlayer teamPlayer : event.getCompetition().getTeamManager().getPlayersOnTeam(team)) {
                     bukkitTeam.addPlayer(teamPlayer.getPlayer());
