@@ -48,6 +48,7 @@ options:
   - keep-inventory{enabled=true}
   - keep-experience{enabled=true}
   - class-equip-only-selects{enabled=true}
+  - name-tag-visibility{option=NEVER}
 initial-phase: waiting
 phases:
   waiting:
