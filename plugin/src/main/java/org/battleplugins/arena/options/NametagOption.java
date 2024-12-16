@@ -1,6 +1,6 @@
 package org.battleplugins.arena.options;
 
-public enum NametagOption {
+public enum NameTagOption {
     FOR_OTHER_TEAMS,
     NEVER,
     ALWAYS,
