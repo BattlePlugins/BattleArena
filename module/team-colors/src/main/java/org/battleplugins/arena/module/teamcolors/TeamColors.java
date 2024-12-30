@@ -55,9 +55,6 @@ public class TeamColors implements ArenaModuleInitializer {
                     .map(EnumArenaOption::getOption)
                     .orElse(NameTagOption.ALWAYS);
                     bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, convertNameTagOption(visibilityOption));
-                    //bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
-                    //Bukkit.getLogger().info("[TC.phase.original]" + visibilityOption.toString());
-                    //Bukkit.getLogger().info("[TC.phase.convert]" + convertNameTagOption(visibilityOption).toString());
 
                     if (showTeamPrefixes(event.getCompetition(), team)) {
                         bukkitTeam.prefix(Component.text("[" + team.getName() + "] ", team.getTextColor()));
@@ -113,9 +110,6 @@ public class TeamColors implements ArenaModuleInitializer {
                             bukkitTeam.color(NamedTextColor.nearestTo(team.getTextColor()));
                             
                             bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, convertNameTagOption(visibilityOption));
-                            //Bukkit.getLogger().info("[TC.phase.original]" + visibilityOption.toString());
-                            //Bukkit.getLogger().info("[TC.phase.convert]" + convertNameTagOption(visibilityOption).toString());
-                            
                             if (showTeamPrefixes(liveCompetition, team)) {
                                 bukkitTeam.prefix(Component.text("[" + team.getName() + "] ", team.getTextColor()));
                             }

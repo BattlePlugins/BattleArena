@@ -114,8 +114,6 @@ public class HighestStatCondition<T extends LiveCompetition<T>> extends VictoryC
                     // win individually, their team should just contain them, or be empty.
                     ArenaTeam team = player.getTeam();
                     if (team == null || this.getCompetition().getArena().getTeams().isNonTeamGame() || !this.teamStats) {
-                        //debug log
-                        Bukkit.getLogger().info("[IPV]: F4A online...");
                         return Stream.of(player);
                     }
 
