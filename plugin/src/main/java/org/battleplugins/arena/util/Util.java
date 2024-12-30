@@ -1,8 +1,11 @@
 package org.battleplugins.arena.util;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.battleplugins.arena.BattleArena;
 import org.battleplugins.arena.config.ArenaOption;
 import org.battleplugins.arena.messages.Messages;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,6 +24,36 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 public class Util {
+    private static final LegacyComponentSerializer LEGACY_SERIALIZER = LegacyComponentSerializer.builder()
+            .hexColors()
+            .useUnusualXRepeatedCharacterHexFormat()
+            .build();
+
+    /**
+     * Serializes a component to a legacy string.
+     * <p>
+     * This method is internal and should not be used by other plugins.
+     *
+     * @param component the component to serialize
+     * @return the serialized component
+     */
+    @ApiStatus.Internal
+    public static String serializeToLegacy(Component component) {
+        return LEGACY_SERIALIZER.serialize(component);
+    }
+
+    /**
+     * Deserializes a legacy string to a component.
+     * <p>
+     * This method is internal and should not be used by other plugins.
+     *
+     * @param legacy the legacy string to deserialize
+     * @return the deserialized component
+     */
+    @ApiStatus.Internal
+    public static Component deserializeFromLegacy(String legacy) {
+        return LEGACY_SERIALIZER.deserialize(legacy);
+    }
 
     public static String toTimeStringShort(Duration duration) {
         long seconds = duration.getSeconds();

@@ -19,6 +19,7 @@ include("plugin")
 
 // Default modules
 include("module:arena-restoration")
+include("module:auto-arena")
 include("module:boundary-enforcer")
 include("module:classes")
 include("module:duels")

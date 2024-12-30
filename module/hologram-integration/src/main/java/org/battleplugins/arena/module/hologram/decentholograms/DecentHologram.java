@@ -4,20 +4,15 @@ import eu.decentsoftware.holograms.api.holograms.HologramLine;
 import eu.decentsoftware.holograms.api.holograms.HologramPage;
 import eu.decentsoftware.holograms.api.holograms.enums.HologramLineType;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.battleplugins.arena.competition.LiveCompetition;
 import org.battleplugins.arena.feature.hologram.Hologram;
+import org.battleplugins.arena.util.Util;
 import org.bukkit.Location;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class DecentHologram implements Hologram {
-    private static final LegacyComponentSerializer SERIALIZER = LegacyComponentSerializer.builder()
-            .hexColors()
-            .useUnusualXRepeatedCharacterHexFormat()
-            .build();
-
     private final LiveCompetition<?> competition;
     private final eu.decentsoftware.holograms.api.holograms.Hologram impl;
 
@@ -47,7 +42,7 @@ public class DecentHologram implements Hologram {
         List<Component> lines = new ArrayList<>();
         for (HologramLine line : page.getLines()) {
             if (line.getType() == HologramLineType.TEXT) {
-                lines.add(SERIALIZER.deserialize(line.getText()));
+                lines.add(Util.deserializeFromLegacy(line.getText()));
             }
         }
 
@@ -66,7 +61,7 @@ public class DecentHologram implements Hologram {
         }
 
         for (Component line : lines) {
-            page.addLine(new HologramLine(page, this.getLocation(), SERIALIZER.serialize(line)));
+            page.addLine(new HologramLine(page, this.getLocation(), Util.serializeToLegacy(line)));
         }
     }
 
@@ -77,7 +72,7 @@ public class DecentHologram implements Hologram {
         }
 
         HologramPage page = this.impl.getPage(0);
-        page.addLine(new HologramLine(page, this.getLocation(), SERIALIZER.serialize(line)));
+        page.addLine(new HologramLine(page, this.getLocation(), Util.serializeToLegacy(line)));
     }
 
     @Override

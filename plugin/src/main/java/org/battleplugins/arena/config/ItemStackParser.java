@@ -3,6 +3,7 @@ package org.battleplugins.arena.config;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
@@ -44,7 +45,19 @@ public final class ItemStackParser implements ArenaConfigParser.Parser<ItemStack
     public static ItemStack deserializeSingular(String contents) throws ParseException {
         ItemStack itemStack;
 
-        SingularValueParser.ArgumentBuffer buffer = SingularValueParser.parseNamed(contents, SingularValueParser.BraceStyle.CURLY, ';');
+        SingularValueParser.ArgumentBuffer buffer;
+        try {
+            buffer = SingularValueParser.parseNamed(contents, SingularValueParser.BraceStyle.CURLY, ';');
+        } catch (ParseException e) {
+            // If we get an error, let's try parsing using Minecraft's native format
+            try {
+                return Bukkit.getItemFactory().createItemStack(contents);
+            } catch (IllegalArgumentException ex) {
+                ex.initCause(e);
+                throw e;
+            }
+        }
+
         if (!buffer.hasNext()) {
             throw new ParseException("No data found for ItemStack")
                     .cause(ParseException.Cause.INVALID_TYPE)

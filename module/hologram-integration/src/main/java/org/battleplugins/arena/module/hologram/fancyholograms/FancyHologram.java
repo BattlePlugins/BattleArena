@@ -2,8 +2,8 @@ package org.battleplugins.arena.module.hologram.fancyholograms;
 
 import de.oliver.fancyholograms.api.data.TextHologramData;
 import de.oliver.fancyholograms.libs.chatcolorhandler.ModernChatColorHandler;
-import de.oliver.fancyholograms.libs.chatcolorhandler.messengers.MiniMessageMessenger;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.battleplugins.arena.competition.LiveCompetition;
 import org.battleplugins.arena.feature.hologram.Hologram;
 import org.bukkit.Location;
@@ -12,6 +12,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public class FancyHologram implements Hologram {
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+    
     private final LiveCompetition<?> competition;
     private final de.oliver.fancyholograms.api.hologram.Hologram impl;
 
@@ -43,7 +45,7 @@ public class FancyHologram implements Hologram {
     @Override
     public void setLines(Component... lines) {
         if (this.impl.getData() instanceof TextHologramData data) {
-            List<String> stringLines = Arrays.stream(lines).map(MiniMessageMessenger.MINI_MESSAGE::serialize).toList();
+            List<String> stringLines = Arrays.stream(lines).map(MINI_MESSAGE::serialize).toList();
             data.setText(stringLines);
         }
     }
@@ -51,7 +53,7 @@ public class FancyHologram implements Hologram {
     @Override
     public void addLine(Component line) {
         if (this.impl.getData() instanceof TextHologramData data) {
-            data.addLine(MiniMessageMessenger.MINI_MESSAGE.serialize(line));
+            data.addLine(MINI_MESSAGE.serialize(line));
         }
     }
 

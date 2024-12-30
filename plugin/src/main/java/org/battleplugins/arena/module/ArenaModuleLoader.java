@@ -112,7 +112,7 @@ public class ArenaModuleLoader {
     public void enableModules() {
         this.modules.values().forEach(module -> {
             if (this.plugin.getMainConfig().getDisabledModules().contains(module.module().id())) {
-                this.plugin.info("Module {} is disabled in the configuration. Skipping...", module.module().name());
+                this.plugin.debug("Module {} is disabled in the configuration. Skipping...", module.module().name());
                 return;
             }
 

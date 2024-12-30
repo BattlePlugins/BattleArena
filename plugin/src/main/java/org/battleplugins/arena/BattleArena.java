@@ -115,7 +115,19 @@ public class BattleArena extends JavaPlugin implements LoggerHolder, BattleArena
         // Register default arenas
         this.registerArena(this, "Arena", Arena.class);
 
+        // Enable the plugin
         this.enable();
+
+        // Enable modules
+        this.moduleLoader.enableModules();
+
+        // Register base command
+        PluginCommand command = this.getCommand("battlearena");
+        if (command == null) {
+            throw new IllegalArgumentException("Failed to register command 'battlearena'. Was it not registered?");
+        }
+
+        command.setExecutor(new BACommandExecutor("battlearena"));
 
         // Loads all arena loaders
         this.loadArenaLoaders(this.arenasPath);
@@ -162,17 +174,6 @@ public class BattleArena extends JavaPlugin implements LoggerHolder, BattleArena
 
         // Clear any remaining dynamic maps
         this.clearDynamicMaps();
-
-        // Enable modules
-        this.moduleLoader.enableModules();
-
-        // Register base command
-        PluginCommand command = this.getCommand("battlearena");
-        if (command == null) {
-            throw new IllegalArgumentException("Failed to register command 'battlearena'. Was it not registered?");
-        }
-
-        command.setExecutor(new BACommandExecutor("battlearena"));
     }
 
     @Override

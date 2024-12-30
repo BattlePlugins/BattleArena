@@ -1,8 +1,6 @@
 package org.battleplugins.arena.feature.hologram;
 
 import org.battleplugins.arena.competition.Competition;
-import org.battleplugins.arena.competition.phase.CompetitionPhaseType;
-import org.battleplugins.arena.event.arena.ArenaPhaseCompleteEvent;
 import org.battleplugins.arena.event.arena.ArenaRemoveCompetitionEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -14,19 +12,6 @@ class HologramListener implements Listener {
 
     public HologramListener(HologramFeature feature) {
         this.feature = feature;
-    }
-
-    @EventHandler
-    public void onPhaseComplete(ArenaPhaseCompleteEvent event) {
-        if (!CompetitionPhaseType.VICTORY.equals(event.getPhase().getType())) {
-            return;
-        }
-
-        if (!this.feature.isEnabled()) {
-            return;
-        }
-
-        this.clearHolograms(event.getCompetition());
     }
 
     @EventHandler

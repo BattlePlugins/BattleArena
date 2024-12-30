@@ -281,7 +281,7 @@ public class ArenaCommandExecutor extends BaseCommandExecutor {
 
                 if (competition instanceof LiveCompetition<?> liveCompetition) {
                     competitionInfo = competitionInfo.append(Component.space())
-                            .append(Messages.PLAYERS.withContext(String.valueOf(liveCompetition.getPlayers().size()), String.valueOf(liveCompetition.getMaxPlayers())).toComponent());
+                            .append(Messages.PLAYERS.withContext(String.valueOf(liveCompetition.getPlayers().size()), liveCompetition.getMaxPlayers() == Integer.MAX_VALUE ? "∞" : String.valueOf(liveCompetition.getMaxPlayers())).toComponent());
                 }
 
                 sender.sendMessage(competitionInfo);
@@ -300,7 +300,7 @@ public class ArenaCommandExecutor extends BaseCommandExecutor {
 
                 if (competition instanceof LiveCompetition<?> liveCompetition) {
                     competitionInfo = competitionInfo.append(Component.space())
-                            .append(Messages.PLAYERS.withContext(String.valueOf(liveCompetition.getPlayers().size()), String.valueOf(liveCompetition.getMaxPlayers())).toComponent());
+                            .append(Messages.PLAYERS.withContext(String.valueOf(liveCompetition.getPlayers().size()), liveCompetition.getMaxPlayers() == Integer.MAX_VALUE ? "∞" : String.valueOf(liveCompetition.getMaxPlayers())).toComponent());
                 }
 
                 sender.sendMessage(competitionInfo);

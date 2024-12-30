@@ -1,17 +1,19 @@
 package org.battleplugins.arena.module.placeholderapi;
 
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
+import net.kyori.adventure.text.Component;
 import org.battleplugins.arena.Arena;
 import org.battleplugins.arena.ArenaPlayer;
 import org.battleplugins.arena.BattleArena;
 import org.battleplugins.arena.competition.Competition;
 import org.battleplugins.arena.competition.LiveCompetition;
-import org.battleplugins.arena.competition.map.CompetitionMap;
-import org.battleplugins.arena.competition.map.LiveCompetitionMap;
 import org.battleplugins.arena.competition.phase.CompetitionPhaseType;
+import org.battleplugins.arena.messages.Messages;
 import org.battleplugins.arena.resolver.Resolver;
 import org.battleplugins.arena.resolver.ResolverKey;
 import org.battleplugins.arena.resolver.ResolverKeys;
+import org.battleplugins.arena.team.ArenaTeam;
+import org.battleplugins.arena.util.Util;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -57,6 +59,37 @@ public class BattleArenaExpansion extends PlaceholderExpansion {
             ResolverKey<?> resolverKey = ResolverKeys.get(placeholder.replace("_", "-"));
             if (resolverKey != null && resolver.has(resolverKey)) {
                 return resolver.resolveToString(resolverKey);
+            }
+
+            // Additional placeholders for competition
+            switch (placeholder) {
+                case "team_color": {
+                    ArenaTeam team = arenaPlayer.getTeam();
+                    if (team != null) {
+                        return team.getTextColor().asHexString();
+                    }
+                }
+                case "team_color_legacy": {
+                    ArenaTeam team = arenaPlayer.getTeam();
+                    if (team != null) {
+                        Component teamColor = Component.empty().color(team.getTextColor());
+                        return Util.serializeToLegacy(teamColor);
+                    }
+                }
+                case "team_name_formatted": {
+                    ArenaTeam team = arenaPlayer.getTeam();
+                    if (team != null) {
+                        Component teamName = team.getFormattedName();
+                        return Messages.wrap(teamName).asPlainText();
+                    }
+                }
+                case "team_name_formatted_legacy": {
+                    ArenaTeam team = arenaPlayer.getTeam();
+                    if (team != null) {
+                        Component teamName = team.getFormattedName();
+                        return Util.serializeToLegacy(teamName);
+                    }
+                }
             }
         }
 

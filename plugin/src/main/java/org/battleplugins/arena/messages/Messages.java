@@ -168,6 +168,10 @@ public final class Messages {
         return new Message("unregistered", MINI_MESSAGE.deserialize(defaultText, RESOLVER));
     }
 
+    public static Message wrap(Component defaultComponent) {
+        return new Message("unregistered", defaultComponent);
+    }
+
     public static Message info(String translationKey, String defaultText) {
         return message(translationKey, MINI_MESSAGE.deserialize(defaultText, RESOLVER).color(PRIMARY_COLOR));
     }

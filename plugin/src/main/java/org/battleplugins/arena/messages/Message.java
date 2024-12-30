@@ -86,6 +86,10 @@ public class Message {
         return PlainTextComponentSerializer.plainText().serialize(this.toComponent());
     }
 
+    public String asMiniMessage() {
+        return Messages.MINI_MESSAGE.serialize(this.toComponent());
+    }
+
     public Component toComponent() {
         return this.text;
     }
