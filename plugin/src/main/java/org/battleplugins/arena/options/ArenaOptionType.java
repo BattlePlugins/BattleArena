@@ -28,9 +28,11 @@ public final class ArenaOptionType<T extends ArenaOption> {
     public static final ArenaOptionType<BooleanArenaOption> KEEP_EXPERIENCE = new ArenaOptionType<>("keep-experience", BooleanArenaOption::new);
     public static final ArenaOptionType<BooleanArenaOption> HUNGER_DEPLETE = new ArenaOptionType<>("hunger-deplete", BooleanArenaOption::new);
     public static final ArenaOptionType<BooleanArenaOption> TEAM_SELECTION = new ArenaOptionType<>("team-selection", BooleanArenaOption::new);
+    
 
     public static final ArenaOptionType<EnumArenaOption<DamageOption>> DAMAGE_PLAYERS = new ArenaOptionType<>("damage-players", params -> new EnumArenaOption<>(params, DamageOption.class, "option"));
     public static final ArenaOptionType<EnumArenaOption<DamageOption>> DAMAGE_ENTITIES = new ArenaOptionType<>("damage-entities", params -> new EnumArenaOption<>(params, DamageOption.class, "option"));
+    public static final ArenaOptionType<EnumArenaOption<NameTagOption>> NAME_TAG_VISIBILITY = new ArenaOptionType<>("name-tag-visibility", params -> new EnumArenaOption<>(params, NameTagOption.class, "option"));
 
     private final String name;
     private final Function<Map<String, String>, T> factory;
