@@ -46,7 +46,7 @@ public abstract class FeatureController<T extends FeatureInstance> {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends FeatureInstance> List<T> getFeatures(Class<T> clazz) {
+    protected static <T extends FeatureInstance> List<T> getFeatures(Class<T> clazz) {
         return (List<T>) FEATURES.getOrDefault(clazz, List.of());
     }
 }

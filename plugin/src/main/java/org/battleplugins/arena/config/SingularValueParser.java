@@ -89,7 +89,15 @@ public final class SingularValueParser {
     }
 
     public static final class ArgumentBuffer {
-        private final Queue<Argument> values = new ArrayDeque<>();
+        private final Queue<Argument> values;
+
+        public ArgumentBuffer() {
+            this(new ArrayDeque<>());
+        }
+
+        public ArgumentBuffer(Queue<Argument> values) {
+            this.values = values;
+        }
 
         public void push(String key, String value) {
             this.values.add(new Argument(key, value));

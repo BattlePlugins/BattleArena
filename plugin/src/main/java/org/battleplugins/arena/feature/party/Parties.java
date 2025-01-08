@@ -7,10 +7,10 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * API for holograms used in Parties.
+ * API for parties used in BattleArena.
  */
 @ApiStatus.Experimental
-public class Parties extends FeatureController<PartiesFeature> {
+public final class Parties extends FeatureController<PartiesFeature> {
     private static PartiesFeature instance;
 
     /**
@@ -29,6 +29,11 @@ public class Parties extends FeatureController<PartiesFeature> {
         return instance.getParty(uuid);
     }
 
+    /**
+     * Gets the instance of the {@link PartiesFeature}.
+     *
+     * @return the instance of the {@link PartiesFeature}
+     */
     public static PartiesFeature instance() {
         if (instance == null) {
             instance = createInstance(PartiesFeature.class);
@@ -37,6 +42,11 @@ public class Parties extends FeatureController<PartiesFeature> {
         return instance;
     }
 
+    /**
+     * Registers a {@link PartiesFeature} to the feature controller.
+     *
+     * @param feature the feature to register
+     */
     public static void register(PartiesFeature feature) {
         registerFeature(PartiesFeature.class, feature);
     }

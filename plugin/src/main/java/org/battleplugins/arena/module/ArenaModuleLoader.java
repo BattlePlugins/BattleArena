@@ -11,6 +11,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -110,7 +111,11 @@ public class ArenaModuleLoader {
     }
 
     public void enableModules() {
-        this.modules.values().forEach(module -> {
+        Collection<ArenaModuleContainer<?>> modules = this.modules.values().stream()
+                .sorted((module1, module2) -> Integer.compare(module2.module().priority(), module1.module().priority()))
+                .toList();
+
+        modules.forEach(module -> {
             if (this.plugin.getMainConfig().getDisabledModules().contains(module.module().id())) {
                 this.plugin.debug("Module {} is disabled in the configuration. Skipping...", module.module().name());
                 return;

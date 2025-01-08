@@ -26,4 +26,13 @@ public abstract class PluginFeature<T extends FeatureInstance> implements Featur
     public boolean isEnabled() {
         return this.plugin.isEnabled();
     }
+
+    /**
+     * Gets the plugin that this feature is implemented by.
+     *
+     * @return the plugin that this feature is implemented by
+     */
+    public Plugin getPlugin() {
+        return this.plugin;
+    }
 }

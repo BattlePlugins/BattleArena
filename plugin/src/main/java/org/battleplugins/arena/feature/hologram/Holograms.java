@@ -11,7 +11,7 @@ import org.jetbrains.annotations.Nullable;
  * API for holograms used in BattleArena.
  */
 @ApiStatus.Experimental
-public class Holograms extends FeatureController<HologramFeature> {
+public final class Holograms extends FeatureController<HologramFeature> {
     private static HologramFeature instance;
 
     /**
@@ -42,6 +42,11 @@ public class Holograms extends FeatureController<HologramFeature> {
         }
     }
 
+    /**
+     * Gets the instance of the {@link HologramFeature}.
+     *
+     * @return the instance of the {@link HologramFeature}
+     */
     @Nullable
     private static HologramFeature instance() {
         if (instance == null) {
@@ -51,6 +56,11 @@ public class Holograms extends FeatureController<HologramFeature> {
         return instance;
     }
 
+    /**
+     * Registers a {@link HologramFeature} to the feature controller.
+     *
+     * @param feature the feature to register
+     */
     public static void register(HologramFeature feature) {
         registerFeature(HologramFeature.class, feature);
     }

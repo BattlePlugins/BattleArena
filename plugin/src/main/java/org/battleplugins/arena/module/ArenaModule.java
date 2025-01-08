@@ -48,4 +48,11 @@ public @interface ArenaModule {
      * @return the authors of the module
      */
     String[] authors() default {};
+
+    /**
+     * The priority of the module.
+     *
+     * @return the priority of the module
+     */
+    int priority() default 0;
 }
