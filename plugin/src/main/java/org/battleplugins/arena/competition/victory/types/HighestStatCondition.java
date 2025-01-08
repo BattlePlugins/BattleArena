@@ -11,6 +11,7 @@ import org.battleplugins.arena.stat.ArenaStat;
 import org.battleplugins.arena.stat.ArenaStats;
 import org.battleplugins.arena.stat.StatHolder;
 import org.battleplugins.arena.team.ArenaTeam;
+import org.bukkit.Bukkit;
 
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -112,7 +113,7 @@ public class HighestStatCondition<T extends LiveCompetition<T>> extends VictoryC
                     // the victory based on whether the team won. If the player is to
                     // win individually, their team should just contain them, or be empty.
                     ArenaTeam team = player.getTeam();
-                    if (team == null || this.getCompetition().getArena().getTeams().isNonTeamGame()) {
+                    if (team == null || this.getCompetition().getArena().getTeams().isNonTeamGame() || !this.teamStats) {
                         return Stream.of(player);
                     }
 

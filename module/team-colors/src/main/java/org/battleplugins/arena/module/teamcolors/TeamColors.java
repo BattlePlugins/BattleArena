@@ -13,14 +13,18 @@ import org.battleplugins.arena.event.player.ArenaTeamLeaveEvent;
 import org.battleplugins.arena.module.ArenaModule;
 import org.battleplugins.arena.module.ArenaModuleInitializer;
 import org.battleplugins.arena.options.ArenaOptionType;
+import org.battleplugins.arena.options.NameTagOption;
 import org.battleplugins.arena.options.types.BooleanArenaOption;
+import org.battleplugins.arena.options.types.EnumArenaOption;
 import org.battleplugins.arena.team.ArenaTeam;
 import org.battleplugins.arena.team.ArenaTeams;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.scoreboard.NameTagVisibility;
 import org.bukkit.scoreboard.Team;
 
+import org.battleplugins.arena.config.ArenaOption;
 /**
  * A module that adds team colors to a player's name.
  */
@@ -40,14 +44,23 @@ public class TeamColors implements ArenaModuleInitializer {
             for (ArenaTeam team : event.getCompetition().getTeamManager().getTeams()) {
                 // Register a new Bukkit team for each team in the competition
                 Team bukkitTeam = event.getPlayer().getScoreboard().getTeam("ba-" + team.getName());
+
+
                 if (bukkitTeam == null) {
                     bukkitTeam = event.getPlayer().getScoreboard().registerNewTeam("ba-" + team.getName());
                     bukkitTeam.displayName(team.getFormattedName());
                     bukkitTeam.color(NamedTextColor.nearestTo(team.getTextColor()));
+
+                    NameTagOption visibilityOption = event.getCompetition().option(ArenaOptionType.NAME_TAG_VISIBILITY)
+                    .map(EnumArenaOption::getOption)
+                    .orElse(NameTagOption.ALWAYS);
+                    bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, convertNameTagOption(visibilityOption));
+
                     if (showTeamPrefixes(event.getCompetition(), team)) {
                         bukkitTeam.prefix(Component.text("[" + team.getName() + "] ", team.getTextColor()));
                     }
                 }
+
 
                 // If players are already on the team, add them to the Bukkit team
                 for (ArenaPlayer teamPlayer : event.getCompetition().getTeamManager().getPlayersOnTeam(team)) {
@@ -56,6 +69,21 @@ public class TeamColors implements ArenaModuleInitializer {
             }
         });
     }
+
+    private Team.OptionStatus convertNameTagOption(NameTagOption option) {
+    switch (option) {
+        case NEVER:
+            return Team.OptionStatus.NEVER;
+        case ALWAYS:
+            return Team.OptionStatus.ALWAYS;
+        case FOR_OWN_TEAM:
+            return Team.OptionStatus.FOR_OWN_TEAM;
+        case FOR_OTHER_TEAMS:
+            return Team.OptionStatus.FOR_OTHER_TEAMS;
+        default:
+            return Team.OptionStatus.ALWAYS;
+    }
+}
 
     @EventHandler
     public void onPhaseStart(ArenaPhaseStartEvent event) {
@@ -67,6 +95,11 @@ public class TeamColors implements ArenaModuleInitializer {
             // Scoreboards may change when phases change, so update
             // team colors in player scoreboards when this happens
             if (event.getCompetition() instanceof LiveCompetition<?> liveCompetition) {
+
+                NameTagOption visibilityOption = liveCompetition.option(ArenaOptionType.NAME_TAG_VISIBILITY)
+                .map(EnumArenaOption::getOption)
+                .orElse(NameTagOption.ALWAYS);
+
                 for (ArenaPlayer arenaPlayer : liveCompetition.getPlayers()) {
                     Player player = arenaPlayer.getPlayer();
                     for (ArenaTeam team : liveCompetition.getTeamManager().getTeams()) {
@@ -75,6 +108,8 @@ public class TeamColors implements ArenaModuleInitializer {
                             bukkitTeam = player.getScoreboard().registerNewTeam("ba-" + team.getName());
                             bukkitTeam.displayName(team.getFormattedName());
                             bukkitTeam.color(NamedTextColor.nearestTo(team.getTextColor()));
+                            
+                            bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, convertNameTagOption(visibilityOption));
                             if (showTeamPrefixes(liveCompetition, team)) {
                                 bukkitTeam.prefix(Component.text("[" + team.getName() + "] ", team.getTextColor()));
                             }
