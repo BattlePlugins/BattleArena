@@ -22,6 +22,19 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.Nullable;
 
+import com.sk89q.worldedit.EditSession;
+import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.WorldEditException;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.extent.clipboard.Clipboard;
+import com.sk89q.worldedit.extent.clipboard.io.BuiltInClipboardFormat;
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat;
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats;
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
+import com.sk89q.worldedit.function.operation.Operation;
+import com.sk89q.worldedit.function.operation.Operations;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.session.ClipboardHolder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -255,8 +268,9 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
             return null;
         }
 
-        if (!BlockUtil.copyToWorld(this.mapWorld, world, this.bounds)) {
-            return null; // Failed to copy
+        // second half of && isnt called if the first half is true
+        if (!pasteSchematic(arena.getName(), this.getName(), world) && !BlockUtil.copyToWorld(this.mapWorld, world, this.bounds)) {
+            return null;
         }
 
         LiveCompetitionMap copy = arena.getMapFactory().create(this.name, arena, this.type, worldName, this.bounds, this.spawns);
@@ -279,5 +293,51 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
      */
     public static MapFactory getFactory() {
         return FACTORY;
+    }
+
+    private boolean pasteSchematic(String arenaName, String mapName, org.bukkit.World bukkitWorld) {
+        Path path = arena.getPlugin().getDataFolder().toPath()
+            .resolve("schematics")
+            .resolve(arenaName.toLowerCase(Locale.ROOT))
+            .resolve(mapName.toLowerCase(Locale.ROOT) + "." +
+                BuiltInClipboardFormat.SPONGE_SCHEMATIC.getPrimaryFileExtension()
+            );
+        if (Files.notExists(path)) {
+            Bukkit.getLogger().warning("Schematic not found: " + path.toString());
+            return false;
+        }
+
+        ClipboardFormat format = ClipboardFormats.findByFile(path.toFile());
+        if (format == null) {
+            Bukkit.getLogger().warning("Unknown schematic format: " + path.getFileName());
+            return false;
+        }
+
+        Clipboard clipboard;
+        try (ClipboardReader reader = format.getReader(Files.newInputStream(path))) {
+            clipboard = reader.read();
+        } catch (IOException e) {
+            Bukkit.getLogger().severe("Failed to read schematic: " + e.getMessage());
+            return false;
+        }
+        
+        BlockVector3 dimensions = clipboard.getDimensions();
+    
+        // Compute center location (in world coordinates)
+        double centerX = dimensions.getX() / 2.0;
+        double centerY = dimensions.getY() / 2.0;
+        double centerZ = dimensions.getZ() / 2.0;
+
+        try (EditSession session = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(bukkitWorld))) {
+            Operation operation = new ClipboardHolder(clipboard).createPaste(session)
+                    .to(BlockVector3.at(-centerX+1, -centerY, -centerZ+1)) // +1 offset required for 0 0 0 pos in world. required when testing spawn pos.
+                    .build();
+
+            Operations.complete(operation);
+            return true;
+        } catch (WorldEditException e) {
+            Bukkit.getLogger().severe("Failed to paste schematic: " + e.getMessage());
+            return false;
+        }
     }
 }
