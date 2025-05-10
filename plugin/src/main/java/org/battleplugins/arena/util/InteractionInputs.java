@@ -172,6 +172,9 @@ public class InteractionInputs {
 
                 @EventHandler
                 public void onInteract(PlayerInteractEvent event) {
+                    if (!player.equals(event.getPlayer())) {
+                        return;
+                    }
                     if (event.getAction() != Action.RIGHT_CLICK_BLOCK && event.getAction() != Action.LEFT_CLICK_BLOCK) {
                         return;
                     }
