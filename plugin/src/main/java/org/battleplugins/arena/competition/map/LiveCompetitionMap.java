@@ -330,7 +330,7 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
 
         try (EditSession session = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(bukkitWorld))) {
             Operation operation = new ClipboardHolder(clipboard).createPaste(session)
-                    .to(BlockVector3.at(-centerX+1, -centerY+1, -centerZ+1)) // +1 offset required for 0 0 0 pos in world. required when testing spawn pos.
+                    .to(BlockVector3.at(-centerX+1, -centerY, -centerZ+1)) // +1 offset required for 0 0 0 pos in world. required when testing spawn pos.
                     .build();
 
             Operations.complete(operation);
