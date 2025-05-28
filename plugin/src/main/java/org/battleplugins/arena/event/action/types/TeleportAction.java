@@ -4,6 +4,7 @@ import org.battleplugins.arena.ArenaPlayer;
 import org.battleplugins.arena.competition.Competition;
 import org.battleplugins.arena.competition.map.options.Bounds;
 import org.bukkit.util.Vector;
+import org.battleplugins.arena.competition.map.MapType;
 import org.battleplugins.arena.competition.map.options.TeamSpawns;
 import org.battleplugins.arena.event.action.EventAction;
 import org.battleplugins.arena.resolver.Resolvable;
@@ -33,12 +34,13 @@ public class TeleportAction extends EventAction {
         TeleportLocation location = TeleportLocation.valueOf(this.get(LOCATION_KEY).toUpperCase(Locale.ROOT));
         boolean randomized = Boolean.parseBoolean(this.getOrDefault(RANDOM, "false"));
 
-        boolean centerDynamicArena = arenaPlayer.getCompetition().getArena().getPlugin().getMainConfig().centerDynamicArena();
+        boolean centerDynamicArena = arenaPlayer.getCompetition().getArena().getPlugin().getMainConfig().centerDynamicArena()
+                && arenaPlayer.getCompetition().getMap().getType() == MapType.DYNAMIC;
         Bounds bounds = arenaPlayer.getCompetition().getMap().getBounds();
         Vector center = new Vector(
-            (bounds.getMaxX() - bounds.getMinX()) / 2.0,
+            (bounds.getMaxX() + bounds.getMinX()) / 2.0,
             bounds.getMinY(),
-            (bounds.getMaxZ() - bounds.getMinZ()) / 2.0
+            (bounds.getMaxZ() + bounds.getMinZ()) / 2.0
         );
 
         PositionWithRotation pos = switch (location) {
@@ -109,7 +111,7 @@ public class TeleportAction extends EventAction {
     private static PositionWithRotation centerOffsetPosition(PositionWithRotation base, Vector offset) {
     return new PositionWithRotation(
         base.getX() - offset.getX(),
-        base.getY() - offset.getY(),
+        base.getY(),
         base.getZ() - offset.getZ(),
         base.getYaw(),
         base.getPitch()

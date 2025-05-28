@@ -256,13 +256,14 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
             return null;
         }
         world.setGameRule(GameRule.DISABLE_RAIDS, true);
+        world.setAutoSave(false);
 
         BattleArenaConfig config = this.getArena().getPlugin().getMainConfig();
 
         // If schematic usage is disabled in the config OR schematic pasting fails,
         // then attempt to fall back to copying the map directly from the map world.
         // If that also fails, return null to indicate map setup failure.
-        if ((!config.isSchematicUsage() || !BlockUtil.pasteSchematic(this))
+        if ((!config.isSchematicUsage() || !BlockUtil.pasteSchematic(this, world))
             && !BlockUtil.copyToWorld(this.mapWorld, world, this.bounds, config.centerDynamicArena())) {
             return null;
         }
