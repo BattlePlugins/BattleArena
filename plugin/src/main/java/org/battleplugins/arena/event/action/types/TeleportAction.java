@@ -2,7 +2,6 @@ package org.battleplugins.arena.event.action.types;
 
 import org.battleplugins.arena.ArenaPlayer;
 import org.battleplugins.arena.competition.Competition;
-import org.battleplugins.arena.competition.map.MapType;
 import org.battleplugins.arena.competition.map.options.Bounds;
 import org.bukkit.util.Vector;
 import org.battleplugins.arena.competition.map.options.TeamSpawns;
@@ -34,13 +33,12 @@ public class TeleportAction extends EventAction {
         TeleportLocation location = TeleportLocation.valueOf(this.get(LOCATION_KEY).toUpperCase(Locale.ROOT));
         boolean randomized = Boolean.parseBoolean(this.getOrDefault(RANDOM, "false"));
 
-        boolean isDynamic = arenaPlayer.getCompetition().getMap().getType() == MapType.DYNAMIC;
+        boolean centerDynamicArena = arenaPlayer.getCompetition().getArena().getPlugin().getMainConfig().centerDynamicArena();
         Bounds bounds = arenaPlayer.getCompetition().getMap().getBounds();
-
         Vector center = new Vector(
-            (bounds.getMinX() + bounds.getMaxX()) / 2.0,
-            (bounds.getMinY() + bounds.getMaxY()) / 2.0,
-            (bounds.getMinZ() + bounds.getMaxZ()) / 2.0
+            (bounds.getMaxX() - bounds.getMinX()) / 2.0,
+            bounds.getMinY(),
+            (bounds.getMaxZ() - bounds.getMinZ()) / 2.0
         );
 
         PositionWithRotation pos = switch (location) {
@@ -53,10 +51,10 @@ public class TeleportAction extends EventAction {
                 }
             case WAITROOM:
                 PositionWithRotation waitroomSpawn = arenaPlayer.getCompetition().getMap().getSpawns().getWaitroomSpawn();
-                yield isDynamic ? offsetPosition(waitroomSpawn, center) : waitroomSpawn;
+                yield centerDynamicArena ? centerOffsetPosition(waitroomSpawn, center) : waitroomSpawn;
             case SPECTATOR:
                 PositionWithRotation spectatorSpawn = arenaPlayer.getCompetition().getMap().getSpawns().getSpectatorSpawn();
-                yield isDynamic ? offsetPosition(spectatorSpawn, center) : spectatorSpawn;
+                yield centerDynamicArena ? centerOffsetPosition(spectatorSpawn, center) : spectatorSpawn;
             case TEAM_SPAWN:
                 Map<String, TeamSpawns> teamSpawns = arenaPlayer.getCompetition().getMap().getSpawns().getTeamSpawns();
                 if (teamSpawns == null) {
@@ -77,12 +75,12 @@ public class TeleportAction extends EventAction {
                 // Fast track if there is only one spawn
                 if (spawns.size() == 1) {
                     PositionWithRotation spawn = spawns.get(0);
-                    yield isDynamic ? offsetPosition(spawn, center) : spawn;
+                    yield centerDynamicArena ? centerOffsetPosition(spawn, center) : spawn;
                 }
 
                 if (randomized) {
                     PositionWithRotation spawn = spawns.get(ThreadLocalRandom.current().nextInt(spawns.size()));
-                    yield isDynamic ? offsetPosition(spawn, center) : spawn;
+                    yield centerDynamicArena ? centerOffsetPosition(spawn, center) : spawn;
                 }
 
                 // Get the spawn index for the team and increment it
@@ -91,7 +89,7 @@ public class TeleportAction extends EventAction {
 
                 // Get the spawn at the index
                 PositionWithRotation spawn = spawns.get(spawnIndex % spawns.size());
-                yield isDynamic ? offsetPosition(spawn, center) : spawn;
+                yield centerDynamicArena ? centerOffsetPosition(spawn, center) : spawn;
         };
 
         if (pos == null) {
@@ -108,13 +106,13 @@ public class TeleportAction extends EventAction {
         LAST_LOCATION
     }
 
-    private PositionWithRotation offsetPosition(PositionWithRotation base, Vector center) {
-        return new PositionWithRotation(
-            base.getX() - center.getX(),
-            base.getY() - center.getY(),
-            base.getZ() - center.getZ(),
-            base.getYaw(),
-            base.getPitch()
-        );
-    }
+    private static PositionWithRotation centerOffsetPosition(PositionWithRotation base, Vector offset) {
+    return new PositionWithRotation(
+        base.getX() - offset.getX(),
+        base.getY() - offset.getY(),
+        base.getZ() - offset.getZ(),
+        base.getYaw(),
+        base.getPitch()
+    );
+}
 }
