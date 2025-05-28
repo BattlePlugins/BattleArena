@@ -36,9 +36,9 @@ public class TeleportAction extends EventAction {
         boolean centerDynamicArena = arenaPlayer.getCompetition().getArena().getPlugin().getMainConfig().centerDynamicArena();
         Bounds bounds = arenaPlayer.getCompetition().getMap().getBounds();
         Vector center = new Vector(
-            (bounds.getMaxX() - bounds.getMinX()) / 2.0,
+            (bounds.getMaxX() + bounds.getMinX()) / 2.0,
             bounds.getMinY(),
-            (bounds.getMaxZ() - bounds.getMinZ()) / 2.0
+            (bounds.getMaxZ() + bounds.getMinZ()) / 2.0
         );
 
         PositionWithRotation pos = switch (location) {
@@ -109,7 +109,7 @@ public class TeleportAction extends EventAction {
     private static PositionWithRotation centerOffsetPosition(PositionWithRotation base, Vector offset) {
     return new PositionWithRotation(
         base.getX() - offset.getX(),
-        base.getY() - offset.getY(),
+        base.getY(),
         base.getZ() - offset.getZ(),
         base.getYaw(),
         base.getPitch()
