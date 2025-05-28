@@ -2,6 +2,8 @@ package org.battleplugins.arena.event.action.types;
 
 import org.battleplugins.arena.ArenaPlayer;
 import org.battleplugins.arena.competition.Competition;
+import org.battleplugins.arena.competition.map.options.Bounds;
+import org.bukkit.util.Vector;
 import org.battleplugins.arena.competition.map.options.TeamSpawns;
 import org.battleplugins.arena.event.action.EventAction;
 import org.battleplugins.arena.resolver.Resolvable;
@@ -31,6 +33,14 @@ public class TeleportAction extends EventAction {
         TeleportLocation location = TeleportLocation.valueOf(this.get(LOCATION_KEY).toUpperCase(Locale.ROOT));
         boolean randomized = Boolean.parseBoolean(this.getOrDefault(RANDOM, "false"));
 
+        boolean centerDynamicArena = arenaPlayer.getCompetition().getArena().getPlugin().getMainConfig().centerDynamicArena();
+        Bounds bounds = arenaPlayer.getCompetition().getMap().getBounds();
+        Vector center = new Vector(
+            (bounds.getMaxX() - bounds.getMinX()) / 2.0,
+            bounds.getMinY(),
+            (bounds.getMaxZ() - bounds.getMinZ()) / 2.0
+        );
+
         PositionWithRotation pos = switch (location) {
             case LAST_LOCATION:
                 Location lastLocation = arenaPlayer.getStorage().getLastLocation();
@@ -40,9 +50,11 @@ public class TeleportAction extends EventAction {
                     yield null;
                 }
             case WAITROOM:
-                yield arenaPlayer.getCompetition().getMap().getSpawns().getWaitroomSpawn();
+                PositionWithRotation waitroomSpawn = arenaPlayer.getCompetition().getMap().getSpawns().getWaitroomSpawn();
+                yield centerDynamicArena ? centerOffsetPosition(waitroomSpawn, center) : waitroomSpawn;
             case SPECTATOR:
-                yield arenaPlayer.getCompetition().getMap().getSpawns().getSpectatorSpawn();
+                PositionWithRotation spectatorSpawn = arenaPlayer.getCompetition().getMap().getSpawns().getSpectatorSpawn();
+                yield centerDynamicArena ? centerOffsetPosition(spectatorSpawn, center) : spectatorSpawn;
             case TEAM_SPAWN:
                 Map<String, TeamSpawns> teamSpawns = arenaPlayer.getCompetition().getMap().getSpawns().getTeamSpawns();
                 if (teamSpawns == null) {
@@ -62,11 +74,13 @@ public class TeleportAction extends EventAction {
 
                 // Fast track if there is only one spawn
                 if (spawns.size() == 1) {
-                    yield spawns.get(0);
+                    PositionWithRotation spawn = spawns.get(0);
+                    yield centerDynamicArena ? centerOffsetPosition(spawn, center) : spawn;
                 }
 
                 if (randomized) {
-                    yield spawns.get(ThreadLocalRandom.current().nextInt(spawns.size()));
+                    PositionWithRotation spawn = spawns.get(ThreadLocalRandom.current().nextInt(spawns.size()));
+                    yield centerDynamicArena ? centerOffsetPosition(spawn, center) : spawn;
                 }
 
                 // Get the spawn index for the team and increment it
@@ -74,7 +88,8 @@ public class TeleportAction extends EventAction {
                 this.spawnTeleportIndexQueue.put(arenaPlayer.getCompetition(), spawnIndex + 1);
 
                 // Get the spawn at the index
-                yield spawns.get(spawnIndex % spawns.size());
+                PositionWithRotation spawn = spawns.get(spawnIndex % spawns.size());
+                yield centerDynamicArena ? centerOffsetPosition(spawn, center) : spawn;
         };
 
         if (pos == null) {
@@ -90,4 +105,14 @@ public class TeleportAction extends EventAction {
         TEAM_SPAWN,
         LAST_LOCATION
     }
+
+    private static PositionWithRotation centerOffsetPosition(PositionWithRotation base, Vector offset) {
+    return new PositionWithRotation(
+        base.getX() - offset.getX(),
+        base.getY() - offset.getY(),
+        base.getZ() - offset.getZ(),
+        base.getYaw(),
+        base.getPitch()
+    );
+}
 }
