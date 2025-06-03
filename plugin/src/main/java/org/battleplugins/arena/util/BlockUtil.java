@@ -74,7 +74,7 @@ public final class BlockUtil {
         return true;
     }
 
-    public static boolean pasteSchematic(LiveCompetitionMap map) {
+    public static boolean pasteSchematic(LiveCompetitionMap map, World World) {
         Path path = map.getArena().getPlugin().getDataFolder().toPath()
             .resolve("schematics")
             .resolve(map.getArena().getName().toLowerCase(Locale.ROOT))
@@ -117,7 +117,7 @@ public final class BlockUtil {
             pasteLocation = BlockVector3.at(bounds.getMinX(), bounds.getMinY(), bounds.getMinZ());
         }
 
-        try (EditSession session = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(map.getWorld()))) {
+        try (EditSession session = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(World))) {
             Operation operation = new ClipboardHolder(clipboard).createPaste(session)
                 .to(pasteLocation)
                 .build();
