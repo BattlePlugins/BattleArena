@@ -22,10 +22,13 @@ public class SingleEliminationTournamentCalculator implements TournamentCalculat
 
         // Sort contestants based on size of players (if there are fewer players, make them
         // more likely to receive a bye as they are at a disadvantage already)
-        contestants.sort(Comparator.<Contestant>comparingInt(c -> c.getPlayers().size()).reversed());
-
         // Sort contestants based on number of byes received
-        contestants.sort(Comparator.comparingInt(Contestant::getByes).reversed());
+        //fixed so both are used, and not one overriding the other.
+        contestants.sort(
+            Comparator
+                .comparingInt((Contestant c) -> c.getPlayers().size()).reversed()
+                .thenComparingInt((Contestant c) -> c.getByes()).reversed()
+        );
 
         // Determine how many matches we need to create
         int matches = (int) Math.ceil(contestants.size() / 2.0);
