@@ -30,6 +30,12 @@ public class BattleArenaConfig {
     @ArenaOption(name = "randomized-arena-join", description = "Whether players should be randomly placed in an Arena when joining without specifying a map.", required = true)
     private boolean randomizedArenaJoin;
 
+    @ArenaOption(name = "use-schematic", description = "Whether creating a dynamic arena should try to use a schematic if one is available first.", required = true)
+    private boolean schematicUsage;
+
+    @ArenaOption(name = "center-dynamic-arena", description = "If true, pastes the dynamic arena centered at 0,0,0.", required = true)
+    private boolean centerDynamicArena;
+
     @ArenaOption(name = "disabled-modules", description = "Modules that are disabled by default.")
     private List<String> disabledModules;
 
@@ -57,6 +63,14 @@ public class BattleArenaConfig {
 
     public boolean isRandomizedArenaJoin() {
         return this.randomizedArenaJoin;
+    }
+
+    public boolean isSchematicUsage() {
+        return this.schematicUsage;
+    }
+
+    public boolean centerDynamicArena() {
+        return this.centerDynamicArena;
     }
 
     public List<String> getDisabledModules() {
