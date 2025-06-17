@@ -23,6 +23,17 @@ max-dynamic-maps: 5
 # enabled.
 randomized-arena-join: false
 
+# Whether dynamic arenas should try to use a schematic file for the map if one is available.
+# If enabled and a schematic exists for the arena, it will be pasted into the world automatically.
+# If no schematic is found or pasting fails, the plugin will fall back to copying the map directly
+# from the source world. Disabling this option will skip the schematic step entirely and always
+# use world copying instead.
+use-schematic: false
+
+# If true, dynamic arenas (schematic or copied) will be pasted centered around 0,0,0.
+# If false, they will be pasted at their original saved coordinates.
+center-dynamic-arena: false
+
 # Modules that are disabled by default. BattleArena comes pre-installed with
 # multiple modules that can be disabled below if their behavior is not desired
 # Example for disabling the parties module:

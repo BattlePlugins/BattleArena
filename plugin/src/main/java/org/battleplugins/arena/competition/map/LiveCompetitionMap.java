@@ -3,7 +3,6 @@ package org.battleplugins.arena.competition.map;
 import net.kyori.adventure.util.TriState;
 import org.battleplugins.arena.Arena;
 import org.battleplugins.arena.ArenaLike;
-import org.battleplugins.arena.competition.Competition;
 import org.battleplugins.arena.competition.LiveCompetition;
 import org.battleplugins.arena.competition.map.options.Bounds;
 import org.battleplugins.arena.competition.map.options.Spawns;
@@ -14,6 +13,7 @@ import org.battleplugins.arena.config.PostProcessable;
 import org.battleplugins.arena.util.BlockUtil;
 import org.battleplugins.arena.util.Util;
 import org.battleplugins.arena.util.VoidChunkGenerator;
+import org.battleplugins.arena.BattleArenaConfig;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
@@ -255,8 +255,14 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
             return null;
         }
 
-        if (!BlockUtil.copyToWorld(this.mapWorld, world, this.bounds)) {
-            return null; // Failed to copy
+        BattleArenaConfig config = this.getArena().getPlugin().getMainConfig();
+
+        // If schematic usage is disabled in the config OR schematic pasting fails,
+        // then attempt to fall back to copying the map directly from the map world.
+        // If that also fails, return null to indicate map setup failure.
+        if ((!config.isSchematicUsage() || !BlockUtil.pasteSchematic(this, world))
+            && !BlockUtil.copyToWorld(this.mapWorld, world, this.bounds, config.centerDynamicArena())) {
+            return null;
         }
 
         LiveCompetitionMap copy = arena.getMapFactory().create(this.name, arena, this.type, worldName, this.bounds, this.spawns);
