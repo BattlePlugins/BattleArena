@@ -31,7 +31,9 @@ public final class BlockUtil {
         }
 
         try (EditSession session = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(newWorld))) {
-            Operation operation = new ClipboardHolder(clipboard).createPaste(session)
+            Operation operation = new ClipboardHolder(clipboard)
+                    .createPaste(session)
+                    .ignoreAirBlocks(true) // its a void world so no issue. its a heavy optimization.
                     .to(BlockVector3.at(bounds.getMinX(), bounds.getMinY(), bounds.getMinZ()))
                     .build();
 
