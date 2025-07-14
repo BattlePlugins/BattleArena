@@ -54,6 +54,7 @@ class CompetitionListener<T extends Competition<T>> implements ArenaListener, Co
 
     @ArenaEventHandler(priority = EventPriority.HIGHEST)
     public void onQuit(PlayerQuitEvent event, ArenaPlayer player) {
+        player.getStorage().markDisconnected();
         player.getCompetition().leave(player, ArenaLeaveEvent.Cause.DISCONNECT);
     }
 

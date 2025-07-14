@@ -15,6 +15,7 @@ import org.battleplugins.arena.util.BlockUtil;
 import org.battleplugins.arena.util.Util;
 import org.battleplugins.arena.util.VoidChunkGenerator;
 import org.bukkit.Bukkit;
+import org.bukkit.GameRule;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.WorldType;
@@ -254,6 +255,8 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
         if (world == null) {
             return null;
         }
+        world.setGameRule(GameRule.DISABLE_RAIDS, true);
+        world.setAutoSave(false);
 
         if (!BlockUtil.copyToWorld(this.mapWorld, world, this.bounds)) {
             return null; // Failed to copy

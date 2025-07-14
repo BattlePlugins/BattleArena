@@ -106,7 +106,7 @@ public class LiveCompetition<T extends Competition<T>> implements ArenaLike, Com
             // the overall maximum number of players this competition can have
             if (teams.getTeamSelection() == TeamSelection.PICK || teams.isNonTeamGame()) {
                 // Player cannot join - arena is full
-                if ((this.getPlayers().size() + this.players.size()) > this.maxPlayers) {
+                if ((this.getPlayers().size() + players.size()) > this.maxPlayers) {
                     return CompletableFuture.completedFuture(JoinResult.ARENA_FULL);
                 }
             } else {

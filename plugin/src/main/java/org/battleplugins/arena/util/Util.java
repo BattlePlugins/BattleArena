@@ -5,6 +5,8 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.battleplugins.arena.BattleArena;
 import org.battleplugins.arena.config.ArenaOption;
 import org.battleplugins.arena.messages.Messages;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.io.File;
@@ -168,6 +170,39 @@ public class Util {
 
         // Realistically, we will only ever be using the values above
         return unit.name().toLowerCase(Locale.ROOT);
+    }
+
+    public static String locationToString(Location location) {
+        return location.getWorld().getName() + "," +
+                location.getX() + "," +
+                location.getY() + "," +
+                location.getZ() + "," +
+                location.getYaw() + "," +
+                location.getPitch();
+    }
+
+    public static Location stringToLocation(String location) {
+        String[] parts = location.split(",");
+        if (parts.length != 4 && parts.length != 6) {
+            throw new IllegalArgumentException("Invalid location string: " + location);
+        }
+
+        String worldName = parts[0];
+        double x = Double.parseDouble(parts[1]);
+        double y = Double.parseDouble(parts[2]);
+        double z = Double.parseDouble(parts[3]);
+
+        float yaw;
+        float pitch;
+        if (parts.length == 6) {
+            yaw = Float.parseFloat(parts[4]);
+            pitch = Float.parseFloat(parts[5]);
+        } else {
+            yaw = 0.0f; // Default yaw if not provided
+            pitch = 0.0f; // Default pitch if not provided
+        }
+
+        return new Location(Bukkit.getServer().getWorld(worldName), x, y, z, yaw, pitch);
     }
 
     public static <T> void copyFields(T oldInstance, T newInstance) {

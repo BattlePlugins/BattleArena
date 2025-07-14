@@ -3,11 +3,14 @@ package org.battleplugins.arena.competition;
 import org.battleplugins.arena.ArenaPlayer;
 import org.battleplugins.arena.BattleArena;
 import org.battleplugins.arena.util.InventoryBackup;
+import org.battleplugins.arena.util.Util;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.jetbrains.annotations.Nullable;
 
@@ -24,6 +27,8 @@ import java.util.function.Consumer;
  * be restored after the end of a competition.
  */
 public class PlayerStorage {
+    public static final NamespacedKey LAST_LOCATION_KEY = new NamespacedKey(BattleArena.getInstance(), "last_location");
+
     private final ArenaPlayer player;
     
     private ItemStack[] inventory;
@@ -48,6 +53,8 @@ public class PlayerStorage {
     private Location lastLocation;
 
     private final BitSet stored = new BitSet();
+
+    private boolean disconnected;
     
     public PlayerStorage(ArenaPlayer player) {
         this.player = player;
@@ -232,6 +239,14 @@ public class PlayerStorage {
     }
     
     private void restoreLocation() {
+        if (this.disconnected) {
+            // Store last location if the player was disconnected
+            this.player.getPlayer().getPersistentDataContainer().set(LAST_LOCATION_KEY, PersistentDataType.STRING, Util.locationToString(this.lastLocation));
+
+            // Let the teleport below pass through just *incase* Bukkit decides to be
+            // intelligent in the future
+        }
+
         this.player.getPlayer().teleport(this.lastLocation);
     }
 
@@ -286,6 +301,10 @@ public class PlayerStorage {
                 this.player.getPlayer().removePotionEffect(effect.getType());
             }
         }
+    }
+
+    public void markDisconnected() {
+        this.disconnected = true;
     }
 
     /**
