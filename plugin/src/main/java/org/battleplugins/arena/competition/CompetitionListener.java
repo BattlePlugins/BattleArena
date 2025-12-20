@@ -79,8 +79,8 @@ class CompetitionListener<T extends Competition<T>> implements ArenaListener, Co
             return;
         }
 
-        // Check if the killer is in the same arena
-        if (killerPlayer.getCompetition().equals(this.competition)) {
+        // Check if the killer is in the same arena and is not the same player
+        if (killerPlayer.getCompetition().equals(this.competition) && !killerPlayer.equals(player)) {
             this.competition.getArena().getEventManager().callEvent(new ArenaKillEvent(killerPlayer, player));
         }
     }
