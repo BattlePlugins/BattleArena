@@ -239,12 +239,14 @@ public class PlayerStorage {
     }
     
     private void restoreLocation() {
-        if (this.disconnected) {
-            // Store last location if the player was disconnected
-            this.player.getPlayer().getPersistentDataContainer().set(LAST_LOCATION_KEY, PersistentDataType.STRING, Util.locationToString(this.lastLocation));
+        if (this.lastLocation == null) {
+            return;
+        }
 
-            // Let the teleport below pass through just *incase* Bukkit decides to be
-            // intelligent in the future
+        if (this.disconnected) {
+            // Store last location if the player was disconnected; teleport when they rejoin.
+            this.player.getPlayer().getPersistentDataContainer().set(LAST_LOCATION_KEY, PersistentDataType.STRING, Util.locationToString(this.lastLocation));
+            return;
         }
 
         this.player.getPlayer().teleport(this.lastLocation);
@@ -305,6 +307,9 @@ public class PlayerStorage {
 
     public void markDisconnected() {
         this.disconnected = true;
+        if (this.lastLocation != null) {
+            this.player.getPlayer().getPersistentDataContainer().set(LAST_LOCATION_KEY, PersistentDataType.STRING, Util.locationToString(this.lastLocation));
+        }
     }
 
     /**

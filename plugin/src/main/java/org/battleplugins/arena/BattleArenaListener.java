@@ -53,8 +53,12 @@ class BattleArenaListener implements Listener {
         PersistentDataContainer container = event.getPlayer().getPersistentDataContainer();
         if (container.has(PlayerStorage.LAST_LOCATION_KEY, PersistentDataType.STRING)) {
             String lastLocationStr = container.get(PlayerStorage.LAST_LOCATION_KEY, PersistentDataType.STRING);
+            if (lastLocationStr == null || lastLocationStr.isBlank()) {
+                container.remove(PlayerStorage.LAST_LOCATION_KEY);
+                return;
+            }
 
-            // Remove before we proceed - we do not want this data lingering in the case of an error
+            // Remove before we proceed - we do not want this data lingering
             container.remove(PlayerStorage.LAST_LOCATION_KEY);
 
             Location lastLocation = Util.stringToLocation(lastLocationStr);
