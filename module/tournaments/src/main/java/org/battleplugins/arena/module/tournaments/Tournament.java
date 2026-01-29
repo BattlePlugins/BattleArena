@@ -70,6 +70,7 @@ public class Tournament {
 
     private final Set<ContestantPair> currentContestants = new HashSet<>();
     private final Set<Contestant> winningContestants = new HashSet<>();
+    private final List<ContestantPair> pendingPairs = new ArrayList<>();
 
     private Tournament(Tournaments tournaments, Arena arena, int maxContestantSize, int requiredPlayersPerRound, int requiredContestantsPerRound) {
         this.tournaments = tournaments;
@@ -182,6 +183,7 @@ public class Tournament {
         this.arena.getEventManager().unregisterEvents(this.listener);
         this.currentContestants.clear();
         this.winningContestants.clear();
+        this.pendingPairs.clear();
         this.watchingPlayers.clear();
         this.queuedPlayers.clear();
     }
@@ -240,46 +242,7 @@ public class Tournament {
         }
 
         TournamentCalculator.MatchResult result = this.calculator.advanceRound(contestants);
-
-        List<ContestantPair> contestantPairs = result.contestantPairs().stream().filter(pair -> !pair.autoAdvance()).toList();
-        int mapsNeeded = contestantPairs.size();
-
-        List<Competition<?>> openCompetitions = this.arena.getPlugin().getCompetitions(this.arena)
-                .stream()
-                .filter(competition -> competition instanceof LiveCompetition<?> liveCompetition
-                        && liveCompetition.getPlayers().isEmpty()
-                        && liveCompetition.getSpectators().isEmpty())
-                .toList();
-
-        List<Competition<?>> allocatedCompetitions = new ArrayList<>(openCompetitions);
-
-        // Ensure we have enough arenas to host the tournament
-        if (openCompetitions.size() < mapsNeeded) {
-            // Check to see if any of the open competitions are dynamic and allocate as needed
-            int requiredCompetitions = mapsNeeded - openCompetitions.size();
-
-            List<LiveCompetitionMap> dynamicMaps = this.arena.getPlugin().getMaps(this.arena)
-                    .stream()
-                    .filter(map -> map.getType() == MapType.DYNAMIC)
-                    .toList();
-
-            if (dynamicMaps.isEmpty()) {
-                throw new TournamentException(TOURNAMENT_NOT_ENOUGH_ARENAS);
-            }
-
-            for (int i = 0; i < requiredCompetitions; i++) {
-                // Now just walk through the dynamic maps and allocate them
-                LiveCompetitionMap map = dynamicMaps.get(i % dynamicMaps.size());
-
-                Competition<?> competition = map.createDynamicCompetition(this.arena);
-                this.arena.getPlugin().addCompetition(this.arena, competition);
-
-                allocatedCompetitions.add(competition);
-            }
-        }
-
-        // Teleport players to arenas
-        int i = 0;
+        List<ContestantPair> nonAutoPairs = new ArrayList<>();
         for (ContestantPair pair : result.contestantPairs()) {
             if (pair.autoAdvance()) {
                 pair.contestant1().addBye();
@@ -297,47 +260,13 @@ public class Tournament {
 
                 continue;
             }
-
-            LiveCompetition<?> competition = (LiveCompetition<?>) allocatedCompetitions.get(i++);
-
-            // Non-team game - just join regularly and let game calculate team. Winner will be
-            // determined by the individual player who wins
-            if (this.arena.getTeams().isNonTeamGame()) {
-                for (Player player : pair.contestant1().getPlayers()) {
-                    competition.join(player, PlayerRole.PLAYING);
-                }
-
-                for (Player player : pair.contestant2().getPlayers()) {
-                    competition.join(player, PlayerRole.PLAYING);
-                }
-            } else {
-                List<ArenaTeam> teams = new ArrayList<>(competition.getTeamManager().getTeams());
-                if (teams.size() < 2) {
-                    this.arena.getPlugin().warn("Tournament for arena {} has less than 2 teams available on map {}. Falling back to default team assignment.",
-                            this.arena.getName(), competition.getMap().getName());
-                    for (Player player : pair.contestant1().getPlayers()) {
-                        competition.join(player, PlayerRole.PLAYING);
-                    }
-
-                    for (Player player : pair.contestant2().getPlayers()) {
-                        competition.join(player, PlayerRole.PLAYING);
-                    }
-                    continue;
-                }
-
-                ArenaTeam team1 = teams.get(0);
-                ArenaTeam team2 = teams.get(1);
-                for (Player player : pair.contestant1().getPlayers()) {
-                    competition.join(player, PlayerRole.PLAYING, team1);
-                }
-
-                for (Player player : pair.contestant2().getPlayers()) {
-                    competition.join(player, PlayerRole.PLAYING, team2);
-                }
-            }
+            nonAutoPairs.add(pair);
         }
 
-        this.currentContestants.addAll(contestantPairs);
+        this.currentContestants.addAll(nonAutoPairs);
+        this.pendingPairs.clear();
+        this.pendingPairs.addAll(nonAutoPairs);
+        this.startPendingMatches();
         this.state = State.IN_PROGRESS;
     }
 
@@ -432,6 +361,14 @@ public class Tournament {
 
         // Advance both contestants in the event of a draw
         this.winningContestants.addAll(contestants);
+    }
+
+    void tryStartPendingMatches() {
+        if (this.state != State.IN_PROGRESS || this.pendingPairs.isEmpty()) {
+            return;
+        }
+
+        this.startPendingMatches();
     }
 
     public static Tournament createTournament(Tournaments tournaments, Arena arena) throws TournamentException {
@@ -532,7 +469,116 @@ public class Tournament {
 
         return contestants;
     }
-    
+
+    private void startPendingMatches() {
+        if (this.pendingPairs.isEmpty()) {
+            return;
+        }
+
+        this.ensureStaticCompetitions();
+
+        List<Competition<?>> openCompetitions = this.getOpenCompetitions();
+        if (openCompetitions.isEmpty()) {
+            if (this.arena.getPlugin().getMaps(this.arena).isEmpty()) {
+                throw new TournamentException(TOURNAMENT_NOT_ENOUGH_ARENAS);
+            }
+            return;
+        }
+
+        List<Competition<?>> allocatedCompetitions = new ArrayList<>(openCompetitions);
+        int requiredCompetitions = Math.max(0, this.pendingPairs.size() - openCompetitions.size());
+        if (requiredCompetitions > 0) {
+            List<LiveCompetitionMap> dynamicMaps = this.arena.getPlugin().getMaps(this.arena)
+                    .stream()
+                    .filter(map -> map.getType() == MapType.DYNAMIC)
+                    .toList();
+
+            for (int i = 0; i < requiredCompetitions && !dynamicMaps.isEmpty(); i++) {
+                LiveCompetitionMap map = dynamicMaps.get(i % dynamicMaps.size());
+                Competition<?> competition = map.createDynamicCompetition(this.arena);
+                this.arena.getPlugin().addCompetition(this.arena, competition);
+                allocatedCompetitions.add(competition);
+            }
+        }
+
+        int i = 0;
+        while (i < allocatedCompetitions.size() && !this.pendingPairs.isEmpty()) {
+            ContestantPair pair = this.pendingPairs.remove(0);
+            LiveCompetition<?> competition = (LiveCompetition<?>) allocatedCompetitions.get(i++);
+            this.startMatch(pair, competition);
+        }
+    }
+
+    private void startMatch(ContestantPair pair, LiveCompetition<?> competition) {
+        // Non-team game - just join regularly and let game calculate team. Winner will be
+        // determined by the individual player who wins
+        if (this.arena.getTeams().isNonTeamGame()) {
+            for (Player player : pair.contestant1().getPlayers()) {
+                competition.join(player, PlayerRole.PLAYING);
+            }
+
+            for (Player player : pair.contestant2().getPlayers()) {
+                competition.join(player, PlayerRole.PLAYING);
+            }
+        } else {
+            List<ArenaTeam> teams = new ArrayList<>(competition.getTeamManager().getTeams());
+            if (teams.size() < 2) {
+                this.arena.getPlugin().warn("Tournament for arena {} has less than 2 teams available on map {}. Falling back to default team assignment.",
+                        this.arena.getName(), competition.getMap().getName());
+                for (Player player : pair.contestant1().getPlayers()) {
+                    competition.join(player, PlayerRole.PLAYING);
+                }
+
+                for (Player player : pair.contestant2().getPlayers()) {
+                    competition.join(player, PlayerRole.PLAYING);
+                }
+                return;
+            }
+
+            ArenaTeam team1 = teams.get(0);
+            ArenaTeam team2 = teams.get(1);
+            for (Player player : pair.contestant1().getPlayers()) {
+                competition.join(player, PlayerRole.PLAYING, team1);
+            }
+
+            for (Player player : pair.contestant2().getPlayers()) {
+                competition.join(player, PlayerRole.PLAYING, team2);
+            }
+        }
+    }
+
+    private void ensureStaticCompetitions() {
+        List<LiveCompetitionMap> staticMaps = this.arena.getPlugin().getMaps(this.arena)
+                .stream()
+                .filter(map -> map.getType() == MapType.STATIC)
+                .toList();
+
+        if (staticMaps.isEmpty()) {
+            return;
+        }
+
+        List<Competition<?>> competitions = this.arena.getPlugin().getCompetitions(this.arena);
+        for (LiveCompetitionMap map : staticMaps) {
+            boolean exists = competitions.stream().anyMatch(competition -> competition.getMap() == map);
+            if (exists) {
+                continue;
+            }
+
+            Competition<?> competition = map.createCompetition(this.arena);
+            this.arena.getPlugin().addCompetition(this.arena, competition);
+        }
+    }
+
+    private List<Competition<?>> getOpenCompetitions() {
+        return this.arena.getPlugin().getCompetitions(this.arena)
+                .stream()
+                .filter(competition -> competition instanceof LiveCompetition<?> liveCompetition
+                        && liveCompetition.getPlayers().isEmpty()
+                        && liveCompetition.getSpectators().isEmpty()
+                        && liveCompetition.getPhaseManager().getCurrentPhase().canJoin())
+                .toList();
+    }
+
     enum State {
         WAITING,
         STARTING,

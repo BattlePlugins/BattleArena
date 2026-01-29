@@ -66,6 +66,8 @@ public class TournamentListener implements ArenaListener {
 
         if (this.tournament.canAdvance()) {
             this.tournament.onAdvance(this.tournament.getWinningContestants());
+        } else {
+            this.tournament.tryStartPendingMatches();
         }
     }
 
@@ -75,6 +77,8 @@ public class TournamentListener implements ArenaListener {
 
         if (this.tournament.canAdvance()) {
             this.tournament.onAdvance(this.tournament.getWinningContestants());
+        } else {
+            this.tournament.tryStartPendingMatches();
         }
     }
 
@@ -84,6 +88,8 @@ public class TournamentListener implements ArenaListener {
 
         if (this.tournament.canAdvance()) {
             this.tournament.onAdvance(this.tournament.getWinningContestants());
+        } else {
+            this.tournament.tryStartPendingMatches();
         }
     }
 
@@ -98,6 +104,8 @@ public class TournamentListener implements ArenaListener {
             Bukkit.getServer().getScheduler().runTask(this.tournament.getArena().getPlugin(), () -> {
                 if (this.tournament.canAdvance()) {
                     this.tournament.onAdvance(this.tournament.getWinningContestants());
+                } else {
+                    this.tournament.tryStartPendingMatches();
                 }
             });
         }
