@@ -117,11 +117,15 @@ public class Tournament {
 
         contestant.removePlayer(player);
         if (contestant.getPlayers().isEmpty()) {
+            contestant.addLoss();
+            this.handleEmptyContestant(contestant);
             this.winningContestants.remove(contestant);
         }
 
         if (this.canAdvance()) {
             this.onAdvance(List.copyOf(this.winningContestants));
+        } else {
+            this.tryStartPendingMatches();
         }
     }
 
@@ -369,6 +373,49 @@ public class Tournament {
         }
 
         this.startPendingMatches();
+    }
+
+    private void handleEmptyContestant(Contestant contestant) {
+        ContestantPair pair = this.findPair(contestant);
+        if (pair == null || pair.contestant2() == null) {
+            return;
+        }
+
+        Contestant opponent = pair.contestant1() == contestant ? pair.contestant2() : pair.contestant1();
+        if (opponent.getPlayers().isEmpty()) {
+            this.pendingPairs.remove(pair);
+            this.currentContestants.remove(pair);
+            this.winningContestants.remove(pair.contestant1());
+            this.winningContestants.remove(pair.contestant2());
+            return;
+        }
+
+        opponent.addWin();
+        this.winningContestants.add(opponent);
+
+        this.pendingPairs.remove(pair);
+        this.currentContestants.remove(pair);
+
+        for (Player player : opponent.getPlayers()) {
+            TOURNAMENT_WON_ROUND.send(player);
+        }
+    }
+
+    @Nullable
+    private ContestantPair findPair(Contestant contestant) {
+        for (ContestantPair pair : this.pendingPairs) {
+            if (pair.contestant1() == contestant || pair.contestant2() == contestant) {
+                return pair;
+            }
+        }
+
+        for (ContestantPair pair : this.currentContestants) {
+            if (pair.contestant1() == contestant || pair.contestant2() == contestant) {
+                return pair;
+            }
+        }
+
+        return null;
     }
 
     public static Tournament createTournament(Tournaments tournaments, Arena arena) throws TournamentException {
