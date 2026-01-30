@@ -40,15 +40,16 @@ class CompetitionListener<T extends Competition<T>> implements ArenaListener, Co
             }
         }
 
-        if (event.getCompetition().getMap().getType() == MapType.DYNAMIC) {
-            Arena arena = event.getArena();
+        Arena arena = event.getArena();
+        if (arena.getType() == CompetitionType.EVENT) {
+            arena.getPlugin().removeCompetition(arena, event.getCompetition());
+            arena.getPlugin().getEventScheduler().eventEnded(arena, event.getCompetition());
+            return;
+        }
 
+        if (event.getCompetition().getMap().getType() == MapType.DYNAMIC) {
             // Teardown if we are in a dynamic map
             arena.getPlugin().removeCompetition(arena, event.getCompetition());
-
-            if (arena.getType() == CompetitionType.EVENT) {
-                arena.getPlugin().getEventScheduler().eventEnded(arena, event.getCompetition());
-            }
         }
     }
 
