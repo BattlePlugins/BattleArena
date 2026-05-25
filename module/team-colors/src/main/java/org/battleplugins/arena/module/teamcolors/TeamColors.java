@@ -30,8 +30,7 @@ import org.bukkit.scoreboard.Team;
 public class TeamColors implements ArenaModuleInitializer {
     public static final String ID = "team-colors";
 
-    public static final ArenaOptionType<BooleanArenaOption> TEAM_PREFIXES = ArenaOptionType.create("team-prefixes",
-            BooleanArenaOption::new);
+    public static final ArenaOptionType<BooleanArenaOption> TEAM_PREFIXES = ArenaOptionType.create("team-prefixes", BooleanArenaOption::new);
 
     @EventHandler
     public void onJoin(ArenaJoinEvent event) {
@@ -43,7 +42,6 @@ public class TeamColors implements ArenaModuleInitializer {
             for (ArenaTeam team : event.getCompetition().getTeamManager().getTeams()) {
                 // Register a new Bukkit team for each team in the competition
                 Team bukkitTeam = event.getPlayer().getScoreboard().getTeam("ba-" + team.getName());
-
                 if (bukkitTeam == null) {
                     bukkitTeam = event.getPlayer().getScoreboard().registerNewTeam("ba-" + team.getName());
                     bukkitTeam.displayName(team.getFormattedName());
@@ -106,15 +104,13 @@ public class TeamColors implements ArenaModuleInitializer {
                             bukkitTeam.displayName(team.getFormattedName());
                             bukkitTeam.color(NamedTextColor.nearestTo(team.getTextColor()));
 
-                            bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY,
-                                    convertNameTagOption(visibilityOption));
+                            bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, convertNameTagOption(visibilityOption));
                             if (showTeamPrefixes(liveCompetition, team)) {
                                 bukkitTeam.prefix(Component.text("[" + team.getName() + "] ", team.getTextColor()));
                             }
                         }
 
-                        for (ArenaPlayer teamPlayer : arenaPlayer.getCompetition().getTeamManager()
-                                .getPlayersOnTeam(team)) {
+                        for (ArenaPlayer teamPlayer : arenaPlayer.getCompetition().getTeamManager().getPlayersOnTeam(team)) {
                             bukkitTeam.addPlayer(teamPlayer.getPlayer());
                         }
                     }
@@ -168,8 +164,7 @@ public class TeamColors implements ArenaModuleInitializer {
 
             Team team = competitionPlayer.getScoreboard().getTeam("ba-" + arenaTeam.getName());
             if (team == null) {
-                BattleArena.getInstance().warn("Team {} does not have a Bukkit team registered for {}!",
-                        arenaTeam.getName(), player.getName());
+                BattleArena.getInstance().warn("Team {} does not have a Bukkit team registered for {}!", arenaTeam.getName(), player.getName());
                 continue;
             }
 
