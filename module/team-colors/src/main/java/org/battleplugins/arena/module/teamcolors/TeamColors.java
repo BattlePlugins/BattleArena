@@ -13,7 +13,9 @@ import org.battleplugins.arena.event.player.ArenaTeamLeaveEvent;
 import org.battleplugins.arena.module.ArenaModule;
 import org.battleplugins.arena.module.ArenaModuleInitializer;
 import org.battleplugins.arena.options.ArenaOptionType;
+import org.battleplugins.arena.options.NameTagOption;
 import org.battleplugins.arena.options.types.BooleanArenaOption;
+import org.battleplugins.arena.options.types.EnumArenaOption;
 import org.battleplugins.arena.team.ArenaTeam;
 import org.battleplugins.arena.team.ArenaTeams;
 import org.bukkit.Bukkit;
@@ -28,6 +30,7 @@ import org.bukkit.scoreboard.Team;
 public class TeamColors implements ArenaModuleInitializer {
     public static final String ID = "team-colors";
 
+    public static final ArenaOptionType<EnumArenaOption<NameTagOption>> NAME_TAG_VISIBILITY = ArenaOptionType.create("name-tag-visibility", params -> new EnumArenaOption<>(params, NameTagOption.class, "option"));
     public static final ArenaOptionType<BooleanArenaOption> TEAM_PREFIXES = ArenaOptionType.create("team-prefixes", BooleanArenaOption::new);
 
     @EventHandler
@@ -44,6 +47,12 @@ public class TeamColors implements ArenaModuleInitializer {
                     bukkitTeam = event.getPlayer().getScoreboard().registerNewTeam("ba-" + team.getName());
                     bukkitTeam.displayName(team.getFormattedName());
                     bukkitTeam.color(NamedTextColor.nearestTo(team.getTextColor()));
+
+                    NameTagOption visibilityOption = event.getCompetition().option(NAME_TAG_VISIBILITY)
+                            .map(EnumArenaOption::getOption)
+                            .orElse(NameTagOption.ALWAYS);
+                    bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, convertNameTagOption(visibilityOption));
+
                     if (showTeamPrefixes(event.getCompetition(), team)) {
                         bukkitTeam.prefix(Component.text("[" + team.getName() + "] ", team.getTextColor()));
                     }
@@ -57,6 +66,15 @@ public class TeamColors implements ArenaModuleInitializer {
         });
     }
 
+    private Team.OptionStatus convertNameTagOption(NameTagOption option) {
+        return switch (option) {
+            case NEVER -> Team.OptionStatus.NEVER;
+            case FOR_OWN_TEAM -> Team.OptionStatus.FOR_OWN_TEAM;
+            case FOR_OTHER_TEAMS -> Team.OptionStatus.FOR_OTHER_TEAMS;
+            case ALWAYS -> Team.OptionStatus.ALWAYS;
+        };
+    }
+
     @EventHandler
     public void onPhaseStart(ArenaPhaseStartEvent event) {
         if (!event.getArena().isModuleEnabled(ID)) {
@@ -67,6 +85,10 @@ public class TeamColors implements ArenaModuleInitializer {
             // Scoreboards may change when phases change, so update
             // team colors in player scoreboards when this happens
             if (event.getCompetition() instanceof LiveCompetition<?> liveCompetition) {
+                NameTagOption visibilityOption = liveCompetition.option(NAME_TAG_VISIBILITY)
+                        .map(EnumArenaOption::getOption)
+                        .orElse(NameTagOption.ALWAYS);
+
                 for (ArenaPlayer arenaPlayer : liveCompetition.getPlayers()) {
                     Player player = arenaPlayer.getPlayer();
                     for (ArenaTeam team : liveCompetition.getTeamManager().getTeams()) {
@@ -75,6 +97,8 @@ public class TeamColors implements ArenaModuleInitializer {
                             bukkitTeam = player.getScoreboard().registerNewTeam("ba-" + team.getName());
                             bukkitTeam.displayName(team.getFormattedName());
                             bukkitTeam.color(NamedTextColor.nearestTo(team.getTextColor()));
+
+                            bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, convertNameTagOption(visibilityOption));
                             if (showTeamPrefixes(liveCompetition, team)) {
                                 bukkitTeam.prefix(Component.text("[" + team.getName() + "] ", team.getTextColor()));
                             }
