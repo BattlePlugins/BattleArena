@@ -58,6 +58,7 @@ public class Tournament {
     private final Arena arena;
     private final int maxContestantSize;
     private final int requiredPlayersPerRound;
+    private final int requiredContestantsPerRound;
     private final TournamentListener listener;
     private final TournamentCalculator calculator;
 
@@ -70,11 +71,12 @@ public class Tournament {
     private final Set<ContestantPair> currentContestants = new HashSet<>();
     private final Set<Contestant> winningContestants = new HashSet<>();
 
-    private Tournament(Tournaments tournaments, Arena arena, int maxContestantSize, int requiredPlayersPerRound) {
+    private Tournament(Tournaments tournaments, Arena arena, int maxContestantSize, int requiredPlayersPerRound, int requiredContestantsPerRound) {
         this.tournaments = tournaments;
         this.arena = arena;
         this.maxContestantSize = maxContestantSize;
         this.requiredPlayersPerRound = requiredPlayersPerRound;
+        this.requiredContestantsPerRound = requiredContestantsPerRound;
         this.listener = new TournamentListener(arena, this);
         this.calculator = new SingleEliminationTournamentCalculator();
 
@@ -143,7 +145,7 @@ public class Tournament {
         Set<Player> players = new HashSet<>(this.queuedPlayers);
         this.queuedPlayers.clear();
 
-        List<Contestant> contestants = calculateContestants(players, this.maxContestantSize, this.requiredPlayersPerRound);
+        List<Contestant> contestants = calculateContestants(players, this.maxContestantSize, this.requiredContestantsPerRound);
         this.advance(contestants);
     }
 
@@ -219,6 +221,7 @@ public class Tournament {
     private void advance(List<Contestant> contestants) {
         this.advancing = false;
         this.currentContestants.clear();
+        this.winningContestants.clear();
         if (contestants.size() <= 1) {
             this.finish(contestants.isEmpty() ? null : contestants.get(0));
             return;
@@ -243,7 +246,9 @@ public class Tournament {
 
         List<Competition<?>> openCompetitions = this.arena.getPlugin().getCompetitions(this.arena)
                 .stream()
-                .filter(competition -> competition instanceof LiveCompetition<?> liveCompetition && liveCompetition.getPhaseManager().getCurrentPhase().canJoin())
+                .filter(competition -> competition instanceof LiveCompetition<?> liveCompetition
+                        && liveCompetition.getPlayers().isEmpty()
+                        && liveCompetition.getSpectators().isEmpty())
                 .toList();
 
         List<Competition<?>> allocatedCompetitions = new ArrayList<>(openCompetitions);
@@ -306,8 +311,22 @@ public class Tournament {
                     competition.join(player, PlayerRole.PLAYING);
                 }
             } else {
-                ArenaTeam team1 = competition.getTeamManager().getTeams().iterator().next();
-                ArenaTeam team2 = competition.getTeamManager().getTeams().iterator().next();
+                List<ArenaTeam> teams = new ArrayList<>(competition.getTeamManager().getTeams());
+                if (teams.size() < 2) {
+                    this.arena.getPlugin().warn("Tournament for arena {} has less than 2 teams available on map {}. Falling back to default team assignment.",
+                            this.arena.getName(), competition.getMap().getName());
+                    for (Player player : pair.contestant1().getPlayers()) {
+                        competition.join(player, PlayerRole.PLAYING);
+                    }
+
+                    for (Player player : pair.contestant2().getPlayers()) {
+                        competition.join(player, PlayerRole.PLAYING);
+                    }
+                    continue;
+                }
+
+                ArenaTeam team1 = teams.get(0);
+                ArenaTeam team2 = teams.get(1);
                 for (Player player : pair.contestant1().getPlayers()) {
                     competition.join(player, PlayerRole.PLAYING, team1);
                 }
@@ -393,6 +412,13 @@ public class Tournament {
     }
 
     public void onDraw(Set<ArenaPlayer> players) {
+        if (this.currentContestants.size() == 1) {
+            // If we're at the final matchup and it draws, the tournament ends in a draw.
+            this.finish(null);
+            return;
+        }
+
+        Set<Contestant> contestants = new HashSet<>();
         for (ArenaPlayer player : players) {
             Contestant contestant = this.getContestant(player.getPlayer());
             if (contestant == null) {
@@ -401,7 +427,11 @@ public class Tournament {
             }
 
             TOURNAMENT_DRAW.send(player.getPlayer());
+            contestants.add(contestant);
         }
+
+        // Advance both contestants in the event of a draw
+        this.winningContestants.addAll(contestants);
     }
 
     public static Tournament createTournament(Tournaments tournaments, Arena arena) throws TournamentException {
@@ -431,23 +461,25 @@ public class Tournament {
         }
 
         int requiredPlayers;
+        int requiredContestants = teamAmount.getMax();
         if (teams.isNonTeamGame()) {
             requiredPlayers = teamAmount.getMax();
         } else {
             requiredPlayers = teamAmount.getMax() * teamSize.getMin();
         }
 
-        return new Tournament(tournaments, arena, teamSize.getMin() == Integer.MAX_VALUE ? teamSize.getMin() : teamSize.getMax(), requiredPlayers);
+        return new Tournament(tournaments, arena, teamSize.getMin() == Integer.MAX_VALUE ? teamSize.getMin() : teamSize.getMax(), requiredPlayers, requiredContestants);
     }
 
     private static List<Contestant> calculateContestants(Set<Player> queuedPlayers, int maxContestantSize, int requiredContestantsPerRound) {
         List<Player> playersList = new ArrayList<>(queuedPlayers);
 
-        int playersPerContestant = maxContestantSize;
+        int safeRequiredContestants = Math.max(1, requiredContestantsPerRound);
         int totalPlayers = playersList.size();
+        int playersPerContestant = Math.min(maxContestantSize, Math.max(1, totalPlayers / safeRequiredContestants));
         int numOfContestants = totalPlayers / playersPerContestant;
 
-        while (numOfContestants < requiredContestantsPerRound && playersPerContestant > 1) {
+        while (numOfContestants < safeRequiredContestants && playersPerContestant > 1) {
             playersPerContestant--;
             numOfContestants = totalPlayers / playersPerContestant;
         }
@@ -479,7 +511,7 @@ public class Tournament {
         // we don't have a situation where one contestant has 1 player and
         // the rest have many more, only if the number of contestants is not
         // multiple of 2^k
-        if (contestants.size() == 1 || Integer.bitCount(contestants.size()) != 1) {
+        if (contestants.size() == 1 || Integer.bitCount(contestants.size()) == 1) {
             return contestants;
         }
 
