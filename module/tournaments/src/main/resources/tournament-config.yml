@@ -19,6 +19,6 @@ advance-time: 10s
 # The commands to run when a player wins a tournament. The argument
 # %player_name% will be replaced with the player's name. The commands are run
 # in the console. These are executed individually for each player, so be careful
-# with commands that affect multiple players (like message broadcasts.
+# with commands that affect multiple players (like message broadcasts).
 commands-on-win:
   - "give %player_name% diamond 16"

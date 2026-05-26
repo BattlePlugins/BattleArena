@@ -12,10 +12,6 @@ val supportedVersions = listOf(
     "1.21.7", "1.21.8", "1.21.9", "1.21.10", "26.1.1", "26.1.2"
 )
 
-repositories {
-    maven("https://maven.enginehub.org/repo/")
-}
-
 dependencies {
     implementation(libs.bstats.bukkit)
     compileOnlyApi(libs.paper.api)

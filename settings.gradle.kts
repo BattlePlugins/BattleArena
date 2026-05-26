@@ -11,6 +11,9 @@ dependencyResolutionManagement {
 
         // Paper, Velocity
         maven("https://repo.papermc.io/repository/maven-public")
+
+        // WorldEdit
+        maven("https://maven.enginehub.org/repo/")
     }
 }
 

@@ -1,6 +1,9 @@
 subprojects {
     dependencies {
         compileOnlyApi(project(":plugin"))
+
+        testRuntimeOnly(rootProject.libs.paper.api)
+        testRuntimeOnly(project(":plugin"))
     }
 
     tasks.jar {

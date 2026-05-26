@@ -17,6 +17,7 @@ import org.battleplugins.arena.util.Util;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -455,7 +456,8 @@ public class Tournament {
         return new Tournament(tournaments, arena, teamSize.getMin() == Integer.MAX_VALUE ? teamSize.getMin() : teamSize.getMax(), requiredPlayers, requiredContestants);
     }
 
-    private static List<Contestant> calculateContestants(Set<Player> queuedPlayers, int maxContestantSize, int requiredContestantsPerRound) {
+    @VisibleForTesting
+    public static List<Contestant> calculateContestants(Set<Player> queuedPlayers, int maxContestantSize, int requiredContestantsPerRound) {
         List<Player> playersList = new ArrayList<>(queuedPlayers);
 
         int safeRequiredContestants = Math.max(1, requiredContestantsPerRound);
@@ -495,15 +497,16 @@ public class Tournament {
         // we don't have a situation where one contestant has 1 player and
         // the rest have many more, only if the number of contestants is not
         // multiple of 2^k
-        if (contestants.size() == 1 || Integer.bitCount(contestants.size()) == 1) {
+        if (contestants.isEmpty() || contestants.size() == 1 || Integer.bitCount(contestants.size()) == 1) {
             return contestants;
         }
 
         int minPlayersPerContestant = totalPlayers / contestants.size();
         int remainingPlayers = totalPlayers % contestants.size();
+        int cursor = 0;
         for (int i = 0; i < contestants.size(); i++) {
             Contestant contestant = contestants.get(i);
-            int start = i * minPlayersPerContestant;
+            int start = cursor;
             int end = start + minPlayersPerContestant;
             if (i < remainingPlayers) {
                 end++;
@@ -512,6 +515,7 @@ public class Tournament {
             contestant.clearPlayers();
             List<Player> players = playersList.subList(start, end);
             players.forEach(contestant::addPlayer);
+            cursor = end;
         }
 
         return contestants;
