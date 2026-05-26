@@ -9,7 +9,7 @@ allprojects {
     }
 
     group = "org.battleplugins"
-    version = "4.0.3-SNAPSHOT"
+    version = "4.0.3"
 
     repositories {
         mavenCentral()
