@@ -57,27 +57,27 @@ public class CompetitionManager {
         // See if we can join any already open competitions
         List<Competition<?>> openCompetitions = this.getCompetitions(arena, name);
         CompletableFuture<CompetitionResult> joinableCompetition = this.findJoinableCompetition(openCompetitions, players, role);
-        return joinableCompetition.thenApplyAsync(result -> {
+        return joinableCompetition.thenComposeAsync(result -> {
             if (result.competition() != null) {
-                return result;
+                return CompletableFuture.completedFuture(result);
             }
 
             CompetitionResult invalidResult = new CompetitionResult(null, !result.result().canJoin() ? result.result() : JoinResult.NOT_JOINABLE);
             if (arena.getType() == CompetitionType.EVENT) {
                 // Cannot create non-requested dynamic competitions for events
-                return invalidResult;
+                return CompletableFuture.completedFuture(invalidResult);
             }
 
             List<LiveCompetitionMap> maps = this.plugin.getMaps(arena);
             if (maps == null) {
                 // No maps, return
-                return invalidResult;
+                return CompletableFuture.completedFuture(invalidResult);
             }
 
             // Ensure we have WorldEdit installed
             if (this.plugin.getServer().getPluginManager().getPlugin("WorldEdit") == null) {
                 this.plugin.error("WorldEdit is required to create dynamic competitions! Not proceeding with creating a new dynamic competition.");
-                return invalidResult;
+                return CompletableFuture.completedFuture(invalidResult);
             }
 
             // Check if we have exceeded the maximum number of dynamic maps
@@ -89,36 +89,48 @@ public class CompetitionManager {
 
             if (dynamicMaps >= this.plugin.getMainConfig().getMaxDynamicMaps() && this.plugin.getMainConfig().getMaxDynamicMaps() != -1) {
                 this.plugin.warn("Exceeded maximum number of dynamic maps for arena {}! Not proceeding with creating a new dynamic competition.", arena.getName());
-                return invalidResult;
+                return CompletableFuture.completedFuture(invalidResult);
             }
 
             // Create a new competition if possible
 
+            List<LiveCompetitionMap> candidateMaps = maps;
             if (name == null) {
                 // Shuffle results if map name is not requested
-                maps = new ArrayList<>(maps);
-                Collections.shuffle(maps);
+                candidateMaps = new ArrayList<>(maps);
+                Collections.shuffle(candidateMaps);
             }
 
-            for (LiveCompetitionMap map : maps) {
+            for (LiveCompetitionMap map : candidateMaps) {
                 if (map.getType() != MapType.DYNAMIC) {
                     continue;
                 }
 
                 if ((name == null || map.getName().equalsIgnoreCase(name))) {
-                    Competition<?> competition = map.createDynamicCompetition(arena);
-                    if (competition == null) {
+                    CompletableFuture<LiveCompetition<?>> competitionFuture = map.createDynamicCompetition(arena);
+
+                    // Quick fail, so we can try the next map if nothing has been copied or
+                    // pasted yet
+                    if (competitionFuture.isCompletedExceptionally() || (competitionFuture.isDone() && competitionFuture.join() == null)) {
                         this.plugin.warn("Failed to create dynamic competition for map {} in arena {}!", map.getName(), arena.getName());
                         continue;
                     }
 
-                    this.addCompetition(arena, competition);
-                    return new CompetitionResult(competition, JoinResult.SUCCESS);
+                    return competitionFuture.thenApplyAsync(competition -> {
+                        if (competition == null) {
+                            // Async copy step failed
+                            this.plugin.warn("Failed to create dynamic competition for map {} in arena {}!", map.getName(), arena.getName());
+                            return invalidResult;
+                        }
+
+                        this.addCompetition(arena, competition);
+                        return new CompetitionResult(competition, JoinResult.SUCCESS);
+                    }, Bukkit.getScheduler().getMainThreadExecutor(this.plugin));
                 }
             }
 
             // No open competitions found or unable to create a new one
-            return invalidResult;
+            return CompletableFuture.completedFuture(invalidResult);
         }, Bukkit.getScheduler().getMainThreadExecutor(this.plugin));
     }
 

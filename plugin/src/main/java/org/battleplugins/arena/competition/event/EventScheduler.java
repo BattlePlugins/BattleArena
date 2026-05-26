@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -56,32 +57,52 @@ public class EventScheduler {
      * @param arena the arena to start the event in
      * @param options the options for the event
      */
-    public void startEvent(Arena arena, EventOptions options) {
+    public CompletableFuture<?> startEvent(Arena arena, EventOptions options) {
         if (this.activeEvents.containsKey(arena)) {
             arena.getPlugin().warn("An event is already running in arena {}, failed to start!", arena.getName());
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         // Create the competition
         List<LiveCompetitionMap> maps = arena.getPlugin().getMaps(arena);
         if (maps.isEmpty()) {
             arena.getPlugin().warn("No maps found for arena {}, failed to start event!", arena.getName());
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         // Get a random map
         LiveCompetitionMap map = maps.get(ThreadLocalRandom.current().nextInt(maps.size()));
-        Competition<?> competition = map.getType() == MapType.DYNAMIC ? map.createDynamicCompetition(arena) : map.createCompetition(arena);
+        CompletableFuture<? extends Competition<?>> competitionFuture = map.getType() == MapType.DYNAMIC ? map.createDynamicCompetition(arena) : CompletableFuture.completedFuture(map.createCompetition(arena));
 
-        // Create the competition
-        arena.getPlugin().addCompetition(arena, competition);
+        return competitionFuture.whenCompleteAsync((competition, e) -> {
+            if (e != null) {
+                arena.getPlugin().error("Failed to create competition for arena {}!", arena.getName(), e);
+                return;
+            }
 
-        this.activeEvents.put(arena, competition);
+            // Create the competition
+            arena.getPlugin().addCompetition(arena, competition);
 
-        // Broadcast that the event has started
-        if (options.getMessage() != null && !Component.empty().equals(options.getMessage())) {
-            Bukkit.broadcast(options.getMessage());
-        }
+            // Check if another scheduled event has been added while our task was running
+            if (this.activeEvents.containsKey(arena)) {
+                arena.getPlugin().warn("An event is already running in arena {}, failed to start!", arena.getName());
+
+                // Yes, the addCompetition before this removal is intentional. There is some tricky
+                // state stuff which is checked at both points, so keeping that functional here
+                // is important. Realistically, the chance of an active event being scheduled at
+                // the same time as another is incredibly low and very unlikely to happen in practice,
+                // but this is an important safeguard to avoid broken states.
+                arena.getPlugin().removeCompetition(arena, competition);
+                return;
+            }
+
+            this.activeEvents.put(arena, competition);
+
+            // Broadcast that the event has started
+            if (options.getMessage() != null && !Component.empty().equals(options.getMessage())) {
+                Bukkit.broadcast(options.getMessage());
+            }
+        });
     }
 
     /**

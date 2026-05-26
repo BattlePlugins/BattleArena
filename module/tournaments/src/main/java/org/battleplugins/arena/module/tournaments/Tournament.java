@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.battleplugins.arena.module.tournaments.TournamentMessages.NEXT_ROUND_STARTING;
@@ -536,6 +537,7 @@ public class Tournament {
             return;
         }
 
+        CompletableFuture<Void> allComplete = CompletableFuture.completedFuture(null);
         List<Competition<?>> allocatedCompetitions = new ArrayList<>(openCompetitions);
         int requiredCompetitions = Math.max(0, this.pendingPairs.size() - openCompetitions.size());
         if (requiredCompetitions > 0) {
@@ -546,21 +548,54 @@ public class Tournament {
 
             for (int i = 0; i < requiredCompetitions && !dynamicMaps.isEmpty(); i++) {
                 LiveCompetitionMap map = dynamicMaps.get(i % dynamicMaps.size());
-                Competition<?> competition = map.createDynamicCompetition(this.arena);
-                this.arena.getPlugin().addCompetition(this.arena, competition);
-                allocatedCompetitions.add(competition);
+                CompletableFuture<? extends Competition<?>> competitionFuture = map.createDynamicCompetition(this.arena);
+                if (competitionFuture.isCompletedExceptionally() || (competitionFuture.isDone() && competitionFuture.join() == null)) {
+                    // World creation failed synchronously; continue trying other maps.
+                    this.arena.getPlugin().warn("Failed to create dynamic competition for map {} in arena {}!", map.getName(), this.arena.getName());
+                    continue;
+                }
+
+                allComplete = allComplete.thenCompose(ignored -> competitionFuture.handleAsync((competition, error) -> {
+                    if (error != null) {
+                        this.arena.getPlugin().error("Failed to create dynamic competition for map {} in arena {}!", map.getName(), this.arena.getName(), error);
+                        return null;
+                    }
+
+                    if (competition == null) {
+                        this.arena.getPlugin().warn("Failed to create dynamic competition for map {} in arena {}!", map.getName(), this.arena.getName());
+                        return null;
+                    }
+
+                    this.arena.getPlugin().addCompetition(this.arena, competition);
+                    allocatedCompetitions.add(competition);
+                    return null;
+                }, Bukkit.getScheduler().getMainThreadExecutor(this.arena.getPlugin())));
             }
         }
 
-        int i = 0;
-        while (i < allocatedCompetitions.size() && !this.pendingPairs.isEmpty()) {
-            ContestantPair pair = this.pendingPairs.remove(0);
-            LiveCompetition<?> competition = (LiveCompetition<?>) allocatedCompetitions.get(i++);
-            this.startMatch(pair, competition);
-        }
+        allComplete.whenCompleteAsync((ignored, error) -> {
+            if (error != null) {
+                // Should not normally happen because each creation is handled via handleAsync,
+                // but keep this guard to avoid silently dropping pending matches.
+                this.arena.getPlugin().error("Unexpected error while preparing tournament matches for arena {}", this.arena.getName(), error);
+            }
+
+            int i = 0;
+            while (i < allocatedCompetitions.size() && !this.pendingPairs.isEmpty()) {
+                ContestantPair pair = this.pendingPairs.remove(0);
+                LiveCompetition<?> competition = (LiveCompetition<?>) allocatedCompetitions.get(i++);
+                this.startMatch(pair, competition);
+            }
+        }, Bukkit.getScheduler().getMainThreadExecutor(this.arena.getPlugin()));
     }
 
     private void startMatch(ContestantPair pair, LiveCompetition<?> competition) {
+        Contestant contestant2 = pair.contestant2();
+        if (contestant2 == null) {
+            this.arena.getPlugin().warn("Tournament pair in arena {} had a null second contestant when starting a match.", this.arena.getName());
+            return;
+        }
+
         // Non-team game - just join regularly and let game calculate team. Winner will be
         // determined by the individual player who wins
         if (this.arena.getTeams().isNonTeamGame()) {
@@ -568,7 +603,7 @@ public class Tournament {
                 competition.join(player, PlayerRole.PLAYING);
             }
 
-            for (Player player : pair.contestant2().getPlayers()) {
+            for (Player player : contestant2.getPlayers()) {
                 competition.join(player, PlayerRole.PLAYING);
             }
         } else {
@@ -580,7 +615,7 @@ public class Tournament {
                     competition.join(player, PlayerRole.PLAYING);
                 }
 
-                for (Player player : pair.contestant2().getPlayers()) {
+                for (Player player : contestant2.getPlayers()) {
                     competition.join(player, PlayerRole.PLAYING);
                 }
                 return;
@@ -592,7 +627,7 @@ public class Tournament {
                 competition.join(player, PlayerRole.PLAYING, team1);
             }
 
-            for (Player player : pair.contestant2().getPlayers()) {
+            for (Player player : contestant2.getPlayers()) {
                 competition.join(player, PlayerRole.PLAYING, team2);
             }
         }

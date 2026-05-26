@@ -3,7 +3,7 @@ package org.battleplugins.arena.competition.map;
 import net.kyori.adventure.util.TriState;
 import org.battleplugins.arena.Arena;
 import org.battleplugins.arena.ArenaLike;
-import org.battleplugins.arena.competition.Competition;
+import org.battleplugins.arena.BattleArena;
 import org.battleplugins.arena.competition.LiveCompetition;
 import org.battleplugins.arena.competition.map.options.Bounds;
 import org.battleplugins.arena.competition.map.options.Spawns;
@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Represents a map for a competition which is live on this server.
@@ -56,6 +57,8 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
 
     private World mapWorld;
     private World parentWorld;
+
+    private CompletableFuture<Object> cachedClipboard;
 
     public LiveCompetitionMap() {
     }
@@ -237,8 +240,7 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
      * @param arena the arena to create the competition for
      * @return the created dynamic competition
      */
-    @Nullable
-    public final LiveCompetition<?> createDynamicCompetition(Arena arena) {
+    public final CompletableFuture<LiveCompetition<?>> createDynamicCompetition(Arena arena) {
         if (this.type != MapType.DYNAMIC) {
             throw new IllegalStateException("Cannot create dynamic competition for non-dynamic map!");
         }
@@ -253,26 +255,37 @@ public class LiveCompetitionMap implements ArenaLike, CompetitionMap, PostProces
         );
 
         if (world == null) {
-            return null;
+            return CompletableFuture.completedFuture(null);
         }
+
         world.setGameRule(GameRule.DISABLE_RAIDS, true);
         world.setAutoSave(false);
 
-        if (!BlockUtil.copyToWorld(this.mapWorld, world, this.bounds)) {
-            return null; // Failed to copy
+        CompletableFuture<Object> clipboard;
+        if (this.cachedClipboard != null) {
+            clipboard = this.cachedClipboard;
+        } else {
+            clipboard = this.cachedClipboard = BlockUtil.buildClipboard(this.mapWorld, this.bounds);
         }
 
-        LiveCompetitionMap copy = arena.getMapFactory().create(this.name, arena, this.type, worldName, this.bounds, this.spawns);
-        // Copy additional fields for custom maps
-        if (copy.getClass() != LiveCompetitionMap.class) {
-            Util.copyFields(this, copy);
-        }
+        return clipboard.thenCompose(c -> BlockUtil.copyToWorld(c, world, this.bounds))
+                .thenApplyAsync(success -> {
+                    if (success == null || !success) {
+                        return null; // Failed to copy
+                    }
 
-        copy.mapWorld = world;
-        copy.parentWorld = this.mapWorld;
-        copy.postProcess();
+                    LiveCompetitionMap copy = arena.getMapFactory().create(this.name, arena, this.type, worldName, this.bounds, this.spawns);
+                    // Copy additional fields for custom maps
+                    if (copy.getClass() != LiveCompetitionMap.class) {
+                        Util.copyFields(this, copy);
+                    }
 
-        return copy.createCompetition(arena);
+                    copy.mapWorld = world;
+                    copy.parentWorld = this.mapWorld;
+                    copy.postProcess();
+
+                    return copy.createCompetition(arena);
+        }, Bukkit.getScheduler().getMainThreadExecutor(arena.getPlugin()));
     }
 
     /**

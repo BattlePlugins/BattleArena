@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A module that adds duels to BattleArena.
@@ -76,32 +77,41 @@ public class Duels implements ArenaModuleInitializer {
         this.duelRequests.remove(sender);
     }
 
-    public void acceptDuel(Arena arena, Player player, Player target) {
-        LiveCompetition<?> competition = findOrJoinCompetition(arena);
-        if (competition == null) {
-            Messages.NO_OPEN_ARENAS.send(player);
-            Messages.NO_OPEN_ARENAS.send(target);
-            return;
-        }
+    public CompletableFuture<?> acceptDuel(Arena arena, Player player, Player target) {
+        return this.findOrJoinCompetition(arena).whenCompleteAsync((competition, e) -> {
+            if (e != null) {
+                Messages.ARENA_ERROR.send(player, e.getMessage());
+                Messages.ARENA_ERROR.send(target, e.getMessage());
 
-        // Non-team game - just join regularly and let game calculate team. Winner will be
-        // determined by the individual player who wins
-        if (arena.getTeams().isNonTeamGame()) {
-            competition.join(player, PlayerRole.PLAYING);
-            competition.join(target, PlayerRole.PLAYING);
-        } else {
-            ArenaTeam team1 = competition.getTeamManager().getTeams().iterator().next();
-            ArenaTeam team2 = competition.getTeamManager().getTeams().iterator().next();
+                arena.getPlugin().error("An error occurred while joining the arena", e);
+                return;
+            }
 
-            competition.join(player, PlayerRole.PLAYING, team1);
-            competition.join(target, PlayerRole.PLAYING, team2);
-        }
+            if (competition == null) {
+                Messages.NO_OPEN_ARENAS.send(player);
+                Messages.NO_OPEN_ARENAS.send(target);
+                return;
+            }
 
-        // Force the game into the in-game state
-        competition.getPhaseManager().setPhase(CompetitionPhaseType.INGAME);
+            // Non-team game - just join regularly and let game calculate team. Winner will be
+            // determined by the individual player who wins
+            if (arena.getTeams().isNonTeamGame()) {
+                competition.join(player, PlayerRole.PLAYING);
+                competition.join(target, PlayerRole.PLAYING);
+            } else {
+                ArenaTeam team1 = competition.getTeamManager().getTeams().iterator().next();
+                ArenaTeam team2 = competition.getTeamManager().getTeams().iterator().next();
+
+                competition.join(player, PlayerRole.PLAYING, team1);
+                competition.join(target, PlayerRole.PLAYING, team2);
+            }
+
+            // Force the game into the in-game state
+            competition.getPhaseManager().setPhase(CompetitionPhaseType.INGAME);
+        });
     }
 
-    private LiveCompetition<?> findOrJoinCompetition(Arena arena) {
+    private CompletableFuture<LiveCompetition<?>> findOrJoinCompetition(Arena arena) {
         List<Competition<?>> openCompetitions = arena.getPlugin().getCompetitions(arena)
                 .stream()
                 .filter(competition -> competition instanceof LiveCompetition<?> liveCompetition
@@ -118,16 +128,18 @@ public class Duels implements ArenaModuleInitializer {
                     .toList();
 
             if (dynamicMaps.isEmpty()) {
-                return null;
+                return CompletableFuture.completedFuture(null);
             }
 
             LiveCompetitionMap map = dynamicMaps.iterator().next();
 
-            LiveCompetition<?> competition = map.createDynamicCompetition(arena);
-            arena.getPlugin().addCompetition(arena, competition);
-            return competition;
+            CompletableFuture<LiveCompetition<?>> competitionFuture = map.createDynamicCompetition(arena);
+            return competitionFuture.thenApplyAsync(competition -> {
+                arena.getPlugin().addCompetition(arena, competition);
+                return competition;
+            }, Bukkit.getScheduler().getMainThreadExecutor(arena.getPlugin()));
         } else {
-            return (LiveCompetition<?>) openCompetitions.iterator().next();
+            return CompletableFuture.completedFuture((LiveCompetition<?>) openCompetitions.iterator().next());
         }
     }
 }
