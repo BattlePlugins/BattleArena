@@ -1,7 +1,6 @@
 package org.battleplugins.arena.module.hologram.fancyholograms;
 
 import de.oliver.fancyholograms.api.data.TextHologramData;
-import de.oliver.fancyholograms.libs.chatcolorhandler.ModernChatColorHandler;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.battleplugins.arena.competition.LiveCompetition;
@@ -36,7 +35,7 @@ public class FancyHologram implements Hologram {
     public List<Component> getLines() {
         if (this.impl.getData() instanceof TextHologramData data) {
             List<String> stringLines = data.getText();
-            return ModernChatColorHandler.translate(stringLines);
+            return stringLines.stream().map(MINI_MESSAGE::deserialize).toList();
         }
 
         return List.of();
