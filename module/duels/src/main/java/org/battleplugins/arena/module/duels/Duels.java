@@ -108,7 +108,7 @@ public class Duels implements ArenaModuleInitializer {
 
             // Force the game into the in-game state
             competition.getPhaseManager().setPhase(CompetitionPhaseType.INGAME);
-        });
+        }, Bukkit.getScheduler().getMainThreadExecutor(arena.getPlugin()));
     }
 
     private CompletableFuture<LiveCompetition<?>> findOrJoinCompetition(Arena arena) {
