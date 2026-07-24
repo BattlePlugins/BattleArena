@@ -7,7 +7,6 @@ import org.battleplugins.arena.competition.LiveCompetition;
 import org.battleplugins.arena.competition.PlayerRole;
 import org.battleplugins.arena.competition.map.LiveCompetitionMap;
 import org.battleplugins.arena.competition.map.MapType;
-import org.battleplugins.arena.competition.phase.CompetitionPhaseType;
 import org.battleplugins.arena.event.arena.ArenaCreateExecutorEvent;
 import org.battleplugins.arena.event.player.ArenaPreJoinEvent;
 import org.battleplugins.arena.messages.Messages;
@@ -105,9 +104,6 @@ public class Duels implements ArenaModuleInitializer {
                 competition.join(player, PlayerRole.PLAYING, team1);
                 competition.join(target, PlayerRole.PLAYING, team2);
             }
-
-            // Force the game into the in-game state
-            competition.getPhaseManager().setPhase(CompetitionPhaseType.INGAME);
         }, Bukkit.getScheduler().getMainThreadExecutor(arena.getPlugin()));
     }
 
