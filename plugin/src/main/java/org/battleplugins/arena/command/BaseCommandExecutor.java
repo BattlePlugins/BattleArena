@@ -403,23 +403,27 @@ public class BaseCommandExecutor implements TabExecutor {
     }
 
     private List<CommandWrapper> getCommandWrappers(String command, String subCommand) {
-        List<CommandWrapper> wrappers = new ArrayList<>();
-
+        List<CommandWrapper> genericWrappers = new ArrayList<>();
+        List<CommandWrapper> explicitWrappers = new ArrayList<>();
+    
         for (String cmd : this.commandWrappers.keySet()) {
             for (CommandWrapper wrapper : this.commandWrappers.get(cmd)) {
                 ArenaCommand arenaCommand = wrapper.getCommand();
-
+    
                 if (!Arrays.asList(arenaCommand.commands()).contains(command)) {
                     continue;
                 }
-
-                if (Arrays.asList(arenaCommand.subCommands()).isEmpty() || Arrays.asList(arenaCommand.subCommands()).contains(subCommand)) {
-                    wrappers.add(wrapper);
+    
+                List<String> subCommands = Arrays.asList(arenaCommand.subCommands());
+                if (subCommands.contains(subCommand)) {
+                    explicitWrappers.add(wrapper);
+                } else if (subCommands.isEmpty()) {
+                    genericWrappers.add(wrapper);
                 }
             }
         }
-
-        return wrappers;
+    
+        return explicitWrappers.isEmpty() ? genericWrappers : explicitWrappers;
     }
 
     private Object verifyArgument(CommandSender sender, String arg, Class<?> parameter) {
