@@ -4,6 +4,7 @@ import org.battleplugins.arena.ArenaPlayer;
 import org.battleplugins.arena.BattleArena;
 import org.battleplugins.arena.util.InventoryBackup;
 import org.battleplugins.arena.util.Util;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -212,8 +213,28 @@ public class PlayerStorage {
     }
 
     private void restoreHealth() {
-        this.player.getPlayer().setHealth(this.health);
-        this.player.getPlayer().setFoodLevel(this.hunger);
+        Player player = this.player.getPlayer();
+        double storedHealth = this.health;
+    
+        player.setFoodLevel(this.hunger);
+    
+        AttributeInstance attribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        if (attribute != null && storedHealth <= attribute.getValue()) {
+            player.setHealth(storedHealth);
+            return;
+        }
+    
+        // Inventory and attribute restoration can change max health after this method runs.
+        // Defer the write so equipment-related attribute changes have settled.
+        Bukkit.getScheduler().runTask(BattleArena.getInstance(), () -> {
+            AttributeInstance updatedAttribute =
+                    player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+    
+            if (updatedAttribute != null) {
+                // Prevent Paper from rejecting health above the current maximum.
+                player.setHealth(Math.min(storedHealth, updatedAttribute.getValue()));
+            }
+        });
     }
 
     private void restoreFlight() {
