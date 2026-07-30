@@ -9,6 +9,7 @@ import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
@@ -156,16 +157,37 @@ public class PlayerStorage {
      * @param toRestore the types to restore
      */
     public void restore(Set<Type> toRestore) {
+        boolean restoreHealth = toRestore.contains(Type.HEALTH);
+    
         for (Type type : toRestore) {
-            if (!this.stored.get(type.ordinal())) {
-                BattleArena.getInstance().warn("Type {} is not stored for player {}.", type, this.player.getPlayer().getName());
+            if (type == Type.HEALTH) {
                 continue;
             }
-
+    
+            if (!this.stored.get(type.ordinal())) {
+                BattleArena.getInstance().warn(
+                        "Type {} is not stored for player {}.",
+                        type,
+                        this.player.getPlayer().getName());
+                continue;
+            }
+    
             type.restore(this);
             this.stored.clear(type.ordinal());
         }
-        
+    
+        if (restoreHealth) {
+            if (!this.stored.get(Type.HEALTH.ordinal())) {
+                BattleArena.getInstance().warn(
+                        "Type {} is not stored for player {}.",
+                        Type.HEALTH,
+                        this.player.getPlayer().getName());
+            } else {
+                this.postRestoreHealth();
+                this.stored.clear(Type.HEALTH.ordinal());
+            }
+        }
+    
         // Reset everything we have in this class
         if (toRestore.contains(Type.INVENTORY)) this.inventory = null;
         if (toRestore.contains(Type.ATTRIBUTES)) this.attributes.clear();
@@ -182,11 +204,11 @@ public class PlayerStorage {
         this.restoreInventory();
         this.restoreGameMode();
         this.restoreAttributes();
-        this.restoreHealth();
         this.restoreExperience();
         this.restoreFlight();
         this.restoreEffects();
         this.restoreLocation();
+        this.postRestoreHealth();
     }
 
     private void restoreInventory() {
@@ -211,9 +233,19 @@ public class PlayerStorage {
         this.player.getPlayer().setFlySpeed(this.flySpeed);
     }
 
-    private void restoreHealth() {
-        this.player.getPlayer().setHealth(this.health);
-        this.player.getPlayer().setFoodLevel(this.hunger);
+    private void postRestoreHealth() {
+        Player player = this.player.getPlayer();
+        AttributeInstance maxHealth =
+                player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+    
+        // Equipment and attributes must be restored before health because they
+        // can change the player's maximum health during restoration.
+        if (maxHealth != null) {
+            // Prevent Paper from rejecting a stored value above the current maximum.
+            player.setHealth(Math.min(this.health, maxHealth.getValue()));
+        }
+    
+        player.setFoodLevel(this.hunger);
     }
 
     private void restoreFlight() {
@@ -320,7 +352,7 @@ public class PlayerStorage {
         INVENTORY(PlayerStorage::storeInventory, PlayerStorage::restoreInventory),
         GAMEMODE(PlayerStorage::storeGameMode, PlayerStorage::restoreGameMode),
         ATTRIBUTES(PlayerStorage::storeAttributes, PlayerStorage::restoreAttributes),
-        HEALTH(PlayerStorage::storeHealth, PlayerStorage::restoreHealth),
+        HEALTH(PlayerStorage::storeHealth, PlayerStorage::postRestoreHealth),
         EXPERIENCE(PlayerStorage::storeExperience, PlayerStorage::restoreExperience),
         FLIGHT(PlayerStorage::storeFlight, PlayerStorage::restoreFlight),
         EFFECTS(PlayerStorage::storeEffects, PlayerStorage::restoreEffects),
