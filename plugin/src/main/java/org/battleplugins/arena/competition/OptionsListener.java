@@ -1,12 +1,18 @@
 package org.battleplugins.arena.competition;
 
 import org.battleplugins.arena.ArenaPlayer;
+import org.battleplugins.arena.BattleArena;
 import org.battleplugins.arena.event.ArenaEventHandler;
 import org.battleplugins.arena.event.ArenaListener;
+import org.battleplugins.arena.messages.Messages;
 import org.battleplugins.arena.options.ArenaOptionType;
 import org.battleplugins.arena.options.DamageOption;
 import org.battleplugins.arena.options.types.BooleanArenaOption;
+import org.battleplugins.arena.options.types.CommandBlockArenaOption;
 import org.battleplugins.arena.options.types.EnumArenaOption;
+import org.bukkit.Bukkit;
+import org.bukkit.command.Command;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventPriority;
@@ -16,8 +22,11 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+
+import java.util.Locale;
 
 class OptionsListener<T extends Competition<T>> implements ArenaListener, CompetitionLike<T> {
     private final LiveCompetition<T> competition;
@@ -152,6 +161,32 @@ class OptionsListener<T extends Competition<T>> implements ArenaListener, Compet
         if (!this.competition.option(ArenaOptionType.HUNGER_DEPLETE).map(BooleanArenaOption::isEnabled).orElse(true)) {
             event.setCancelled(true);
         }
+    }
+
+    @ArenaEventHandler(priority = EventPriority.LOWEST)
+    public void onCommandPreprocess(PlayerCommandPreprocessEvent event) {
+        CommandBlockArenaOption option = this.competition.option(ArenaOptionType.BLOCK_COMMANDS).orElse(null);
+        if (option == null || !option.isEnabled()) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        if (player.hasPermission("battlearena.command.bypass")) {
+            return;
+        }
+
+        String label = event.getMessage().substring(1).split(" ", 2)[0].toLowerCase(Locale.ROOT);
+        if (this.isBattleArenaCommand(label) || option.isWhitelisted(label)) {
+            return;
+        }
+
+        event.setCancelled(true);
+        Messages.COMMAND_BLOCKED.send(player);
+    }
+
+    private boolean isBattleArenaCommand(String label) {
+        Command command = Bukkit.getCommandMap().getCommand(label);
+        return command instanceof PluginCommand pluginCommand && pluginCommand.getPlugin().equals(BattleArena.getInstance());
     }
 
     @SuppressWarnings("unchecked")
