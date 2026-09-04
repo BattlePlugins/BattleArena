@@ -12,8 +12,15 @@ public class IngamePhase<T extends LiveCompetition<T>> extends LiveCompetitionPh
     @Override
     public void onStart() {
         Lives lives = this.getCompetition().getArena().getLives();
-        if (lives != null && lives.isEnabled()) {
-            for (ArenaPlayer player : this.getCompetition().getPlayers()) {
+        for (ArenaPlayer player : this.getCompetition().getPlayers()) {
+            // Deaths/kills may have accrued while the player was waiting for the
+            // match to start (e.g. fall damage during the countdown). Those should
+            // not count towards elimination-based victory conditions once the
+            // match actually begins.
+            player.setStat(ArenaStats.DEATHS, 0);
+            player.setStat(ArenaStats.KILLS, 0);
+
+            if (lives != null && lives.isEnabled()) {
                 player.setStat(ArenaStats.LIVES, lives.getLives());
             }
         }
